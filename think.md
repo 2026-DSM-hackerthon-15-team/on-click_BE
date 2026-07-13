@@ -80,86 +80,93 @@
 - `/stores/{storeId}/dashboard/hourly-visitors` 응답 형식은 유지되며 완료 결제 건수로 계산됨
 - 주문 건수와 방문자 수는 현재 같은 값이며, 둘 다 완료된 결제 거래 수를 의미함
 
-## 아직 만들어야 하는 기능
+## 이번 구현에서 완료한 작업
 
-### 1. 현재 변경사항 마무리
+### Git 정리
 
-- [ ] 사용자 파일인 `Agents.md`를 제외하고 현재 리팩터링 변경사항을 기능별로 Git 커밋
-- [ ] 실제 배포용 PostgreSQL 환경에서 V2, V3 마이그레이션 사전 백업 및 smoke test
-- [ ] 프론트에서 `role`, 기존 `transactionId`, 방문자 입력 API 사용 부분 제거
-- [ ] 프론트에서 판매 등록 응답의 `saleId`를 저장하고 취소 요청에 사용
+- [x] 사용자 파일 `Agents.md`를 수정하거나 커밋하지 않음
+- [x] 기존 소유권·POS 리팩터링 커밋: `b418751`
+- [x] 계정·매장·V4 workflow 스키마 커밋: `b8cb206`
+- [x] AI HTTP adapter·컨설팅·채팅 커밋: `4016b2c`
+- [x] 미디어·마케팅·Instagram 보안 연동 커밋: `a9e769f`
 
-### 2. 마이페이지와 계정 관리
+### 마이페이지와 계정 관리
 
-- [ ] 내 계정 정보 조회 API
-- [ ] 계정 정보 수정 API
-- [ ] 비밀번호 변경 API
-- [ ] 마이페이지에서 기존 매장 목록·추가·수정 API 연결
-- [ ] 계정 수정 시 현재 비밀번호 확인 등 보안 규칙 정의
+- [x] `GET /me` 내 계정 정보 조회
+- [x] 현재 비밀번호 확인이 필요한 `PATCH /me` 계정 수정
+- [x] `PATCH /me/password` 비밀번호 변경
+- [x] 회원가입 이름·이메일 및 아이디·이메일 중복 검사
+- [x] 여러 매장 목록·추가·수정과 매장별 `closingTime` 관리
+- [x] `closingTime`의 엄격한 `HH:mm` 검증과 기본값 `22:00`
 
-### 3. 컨설팅
+### 일일 컨설팅
 
-- [ ] 매장별 컨설팅 결과 엔티티와 테이블
-- [ ] 컨설팅 제목, 내용, 대상 날짜, 생성 시각 저장
-- [ ] 컨설팅 목록 조회와 상세 조회 API
-- [ ] 매일 저녁 매장별 판매 데이터를 취합하는 스케줄러
-- [ ] AI 서버에 컨설팅 생성을 요청하는 Client 인터페이스
-- [ ] AI 서버 준비 전 사용할 컨설팅 mock adapter
-- [ ] 중복 일일 컨설팅 생성 방지와 실패 재시도 정책
+- [x] 매장별 컨설팅 엔티티·테이블과 제목·본문·대상일·상태·시각 저장
+- [x] 컨설팅 목록·상세 조회 API
+- [x] 매장 시간대와 마감시간을 기준으로 판매 데이터를 취합하는 스케줄러
+- [x] `(storeId, targetDate)` 중복 방지, DB claim lease, 최대 3회 재시도
+- [x] mock/HTTP `AiClient`에서 동일한 공개 계약 사용
 
-### 4. 채팅과 채팅방
+### 채팅과 채팅방
 
-- [ ] 여러 채팅방 생성, 목록 조회, 상세 조회, 삭제
-- [ ] 채팅방 삭제 시 포함된 메시지 함께 삭제
-- [ ] 사용자 메시지와 AI 메시지를 구분해 저장
-- [ ] 메시지 처리 상태(`PENDING`, `COMPLETED`, `FAILED`) 관리
-- [ ] 사용자 질문 저장 후 AI 서버에 답변 생성 요청
-- [ ] 생성된 AI 답변을 백엔드 DB에 저장
-- [ ] 프론트 polling용 메시지 조회 API
-- [ ] 인스타 홍보·컨설팅 질문에는 해당 기능 링크를 반환하는 규약
-- [ ] AI 서버 준비 전 사용할 채팅 mock adapter
+- [x] 매장별 채팅방 생성·목록·상세·삭제와 메시지 cascade 삭제
+- [x] USER/ASSISTANT 역할과 `PENDING`, `COMPLETED`, `FAILED` 상태 저장
+- [x] 사용자 메시지와 PENDING 응답을 먼저 저장한 뒤 커밋 후 AI 비동기 생성
+- [x] `afterId` 기반 프론트 polling
+- [x] `clientMessageId` 기반 재전송 멱등 처리와 매장별 동시성 잠금
+- [x] 컨설팅·마케팅 질문에 매장 기능 경로 링크 반환
+- [x] 실패 작업 DB lease·복구·최대 3회 재시도
 
-### 5. 인스타그램 마케팅
+### 미디어·Instagram 마케팅
 
-- [ ] 매장별 마케팅 콘텐츠 엔티티와 테이블
-- [ ] AI 마케팅 문구 생성 요청과 결과 저장
-- [ ] 마케팅 콘텐츠 목록·상세 조회
-- [ ] 사용자가 콘텐츠를 수정하고 승인하는 API
-- [ ] 승인 전후 상태 관리
-- [ ] Instagram OAuth 연결·해제·상태 조회
-- [ ] Instagram access token 안전한 저장 및 갱신 정책
-- [ ] 승인된 콘텐츠를 Instagram에 게시하는 연동
-- [ ] AI·Instagram 서버 준비 전 사용할 mock adapter
+- [x] JPEG/PNG 업로드·공개 조회·미사용 파일 삭제 API
+- [x] MIME·signature·실제 디코딩·해상도·크기 검증과 UUID 저장명
+- [x] DB rollback/commit과 물리 파일 정합성, 24시간 orphan 정리
+- [x] 마케팅 AI 초안 생성·목록·상세·수정·승인과 상태 관리
+- [x] carousel 이미지 순서 영속화
+- [x] Instagram OAuth 연결 시작·callback·상태 조회·해제
+- [x] OAuth state 해시 저장, 비관적 잠금 기반 1회 소비, 만료 정리
+- [x] access token AES-256-GCM 암호화, 만료 전 갱신, 연결 해제 시 권한 폐기 시도
+- [x] 게시 작업의 원자적 DB claim과 동시 실행 차단
+- [x] 외부 게시 결과 불명 시 자동 재게시하지 않고 `FAILED`로 전환
+- [x] AI·Instagram mock/HTTP provider 전환 설정
 
-### 6. 대시보드 추가 요구사항 확인
+### 실제 AI 서버 연결 준비
 
-- [ ] 평균 별점의 데이터 출처 결정
-- [ ] 별도 리뷰 provider를 사용할지, 직접 입력할지, 이번 범위에서 제외할지 확정
-- [ ] 평균 별점을 포함하기로 하면 오늘 요약 응답과 명세에 추가
+- [x] 예측·컨설팅·채팅·마케팅용 `AiClient` DTO와 HTTP 구현체
+- [x] base URL, 내부 API 키, connect/read timeout, 기능별 path 환경변수화
+- [x] 일시 오류 retry와 최종 `AI_SERVICE_UNAVAILABLE` 변환
+- [x] mock과 HTTP provider가 같은 프론트 공개 응답 사용
 
-### 7. 실제 AI 서버 연결
+### 문서와 검증
 
-- [ ] `AiClient`의 HTTP 구현체 추가
-- [ ] AI 서버 URL, 인증 정보, timeout, retry 환경변수화
-- [ ] 마감 매출·내일 방문자·채팅·마케팅·컨설팅 요청 DTO 확정
-- [ ] AI 서버 장애 시 오류 응답과 재시도 정책 적용
-- [ ] provider를 mock에서 실제 HTTP 구현으로 바꿔도 공개 API 응답은 그대로 유지
+- [x] README에 설정, 흐름, 프론트 변경사항, 운영 점검 추가
+- [x] Notion 일반 API 데이터베이스를 실제 구현 39개 endpoint로 전면 갱신
+- [x] 기존 API 문서 템플릿(`개요 → Endpoint → Request → Response → 동작 → 예외`) 유지
+- [x] 구형 법률·자동화·매장 검색·방문자 입력·컨설팅 callback 문서를 보관함으로 이동
+- [x] 기존 컨설팅 페이지의 사용자 💡 콜아웃 보존
+- [x] AI 서버 API 명세서 데이터베이스는 수정하지 않음
+- [x] Notion 역조회 결과: 39개, 구현 완료 39개, endpoint 누락·중복 0개
+- [x] Java 21 main/test 전체 컴파일 성공
+- [x] Flyway V1→V4, Hibernate schema validation 포함 자동화 테스트 112개 전부 통과
+- [x] `docker compose config --quiet`와 `git diff --check` 통과
 
-## 권장 구현 순서
+## 외부 환경에서 남은 작업
 
-1. 현재 소유권·판매·방문자 리팩터링 커밋 및 프론트 계약 반영
-2. 마이페이지와 계정 관리
-3. 프로젝트 핵심인 일일 컨설팅과 내부 mock AI 흐름
-4. 채팅방·메시지 저장과 polling
-5. 마케팅 콘텐츠 생성·수정·승인
-6. Instagram OAuth와 실제 게시 연동
-7. 실제 AI 서버 HTTP adapter 연결
-8. 평균 별점 포함 여부 확정 및 반영
+- [ ] 운영 PostgreSQL 백업 후 복제 환경에서 V2→V4 migration smoke test
+  - 현재 실행 환경은 Docker socket 접근이 거부되어 실제 PostgreSQL 컨테이너 실행은 불가능했다.
+  - H2 PostgreSQL 호환 모드의 V1→V4 이관·제약·schema validation 테스트는 통과했다.
+- [ ] 프론트 저장소에서 `role`, 기존 `transactionId`, 방문자 입력 API 제거
+- [ ] 프론트에서 `saleId`, `clientMessageId`, 채팅·게시 polling 흐름 연결
+- [ ] 운영 공개 HTTPS 미디어 URL과 Meta callback URL 설정
+- [ ] 실제 AI/Meta 자격 증명으로 provider별 staging end-to-end 검증
+- [ ] 표준 Gradle 실행이 허용된 환경에서 `./gradlew clean build` 재실행
+  - 현재 sandbox에서는 Gradle cache 쓰기와 로컬 lock listener가 제한되어, 동일 의존성 classpath로 `javac`와 JUnit Platform 전체 테스트를 직접 실행했다.
 
-## 범위 메모
+## 확정한 범위 결정
 
-- 실제 POS 장비를 직접 연동하는 것은 현재 범위가 아니다. POS처럼 판매 데이터를 넣을 수 있는 API를 제공한다.
-- AI 서버 API 명세 자체는 이 백엔드 작업에서 수정하지 않는다.
-- AI 기능은 현재 mock adapter로 동작하지만 프론트에는 정상 연동된 것과 같은 공개 계약을 제공한다.
-- 법률 조언과 자동화 기능은 현재 `Agents.md`의 상세 기능에 포함되지 않았으므로 구현 전에 별도 범위 확인이 필요하다.
-- 최신 소유권·판매 리팩터링은 아직 Git 커밋 전 작업 트리에 존재한다.
+- 평균 별점은 신뢰할 리뷰 데이터 출처가 없어 이번 제품 범위에서 제외한다. 임의 값은 응답하지 않는다.
+- 실제 POS 장비 연결은 범위 밖이며 POS처럼 판매 데이터를 넣는 API를 제공한다.
+- 법률 조언·사용자 자동화·매장 검색은 `Agents.md` 상세 기능 밖이므로 구현하지 않고 구형 명세를 보관했다.
+- AI 서버 전용 API 명세는 해당 서버 소유 계약으로 유지하며 이 백엔드에서는 수정하지 않았다.
+- 백엔드는 AI 서버가 필요로 하는 매장 데이터를 DTO로 취합해 outbound HTTP 요청으로 전달한다. 사용자 JWT가 필요한 내부 GET API를 AI 서버에 노출하지 않는다.
