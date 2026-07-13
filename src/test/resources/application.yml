@@ -13,5 +13,7 @@ spring:
 app:
   security:
     jwt-secret: test-secret-test-secret-test-secret-1234
+  cors:
+    allowed-origins: https://aaaaaa-ead.pages.dev,http://localhost:5173
   ai:
     provider: mock
