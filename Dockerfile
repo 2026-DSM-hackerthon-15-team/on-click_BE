@@ -12,7 +12,9 @@ RUN ./gradlew bootJar --no-daemon
 FROM eclipse-temurin:21-jre-jammy
 
 RUN groupadd --system onclick \
-    && useradd --system --gid onclick --home-dir /app onclick
+    && useradd --system --gid onclick --home-dir /app onclick \
+    && mkdir -p /data/media \
+    && chown onclick:onclick /data/media
 
 WORKDIR /app
 

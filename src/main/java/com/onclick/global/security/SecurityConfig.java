@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/auth/signup", "/auth/login").permitAll()
+                        .requestMatchers("/public/media/**", "/integrations/instagram/callback").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)
@@ -83,6 +84,8 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/auth/**", configuration);
+        source.registerCorsConfiguration("/me", configuration);
+        source.registerCorsConfiguration("/me/**", configuration);
         source.registerCorsConfiguration("/stores/**", configuration);
         return source;
     }
