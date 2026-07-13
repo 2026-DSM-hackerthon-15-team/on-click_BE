@@ -1,6 +1,7 @@
 package com.onclick.domain.store.entity;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneId;
 
 import com.onclick.domain.auth.entity.User;
@@ -22,6 +23,7 @@ import jakarta.persistence.Table;
 public class Store {
 
     public static final String DEFAULT_TIME_ZONE = "Asia/Seoul";
+    public static final LocalTime DEFAULT_CLOSING_TIME = LocalTime.of(22, 0);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,6 +39,9 @@ public class Store {
     @Column(name = "time_zone", nullable = false, length = 50)
     private String timeZone;
 
+    @Column(name = "closing_time", nullable = false)
+    private LocalTime closingTime;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -47,9 +52,14 @@ public class Store {
     }
 
     public Store(User owner, String name, String timeZone) {
+        this(owner, name, timeZone, DEFAULT_CLOSING_TIME);
+    }
+
+    public Store(User owner, String name, String timeZone, LocalTime closingTime) {
         this.owner = java.util.Objects.requireNonNull(owner, "owner must not be null");
         this.name = name;
         this.timeZone = timeZone;
+        this.closingTime = java.util.Objects.requireNonNull(closingTime, "closingTime must not be null");
     }
 
     @PrePersist
@@ -65,11 +75,18 @@ public class Store {
     }
 
     public void update(String name, String timeZone) {
+        update(name, timeZone, null);
+    }
+
+    public void update(String name, String timeZone, LocalTime closingTime) {
         if (name != null) {
             this.name = name;
         }
         if (timeZone != null) {
             this.timeZone = timeZone;
+        }
+        if (closingTime != null) {
+            this.closingTime = closingTime;
         }
         this.updatedAt = Instant.now();
     }
@@ -96,6 +113,10 @@ public class Store {
 
     public String getTimeZone() {
         return timeZone;
+    }
+
+    public LocalTime getClosingTime() {
+        return closingTime;
     }
 
     public Instant getCreatedAt() {

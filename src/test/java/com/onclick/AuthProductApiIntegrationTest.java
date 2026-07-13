@@ -86,13 +86,19 @@ class AuthProductApiIntegrationTest {
                                 {
                                   "accountId": "%s",
                                   "password": "%s",
+                                  "name": "통합 테스트 사용자",
+                                  "email": "%s@example.com",
                                   "storeName": "통합 테스트 매장",
-                                  "timeZone": "Asia/Seoul"
+                                  "timeZone": "Asia/Seoul",
+                                  "closingTime": "22:30"
                                 }
-                                """.formatted(accountId, password)))
+                                """.formatted(accountId, password, accountId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accountId").value(accountId))
+                .andExpect(jsonPath("$.name").value("통합 테스트 사용자"))
+                .andExpect(jsonPath("$.email").value(accountId + "@example.com"))
                 .andExpect(jsonPath("$.storeName").value("통합 테스트 매장"))
+                .andExpect(jsonPath("$.closingTime").value("22:30"))
                 .andReturn();
 
         JsonNode signUpBody = readBody(signUpResult);
@@ -172,10 +178,12 @@ class AuthProductApiIntegrationTest {
                                 {
                                   "accountId": "%s",
                                   "password": "%s",
+                                  "name": "대시보드 테스트 사용자",
+                                  "email": "%s@example.com",
                                   "storeName": "대시보드 통합 테스트 매장",
                                   "timeZone": "Asia/Seoul"
                                 }
-                                """.formatted(accountId, password)))
+                                """.formatted(accountId, password, accountId)))
                 .andExpect(status().isCreated())
                 .andReturn();
         long storeId = readBody(signUpResult).required("storeId").asLong();

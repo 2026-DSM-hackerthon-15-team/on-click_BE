@@ -1,5 +1,6 @@
 package com.onclick.domain.store.service;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -69,6 +70,7 @@ class StoreServiceTest {
             assertThat(response.id()).isEqualTo(9L);
             assertThat(response.name()).isEqualTo("1호점");
             assertThat(response.timeZone()).isEqualTo("Asia/Seoul");
+            assertThat(response.closingTime()).isEqualTo(LocalTime.of(22, 0));
         });
     }
 
@@ -83,15 +85,20 @@ class StoreServiceTest {
             return store;
         });
 
-        var response = storeService.createStore(jwt, new CreateStoreRequest(" 2호점 ", "UTC"));
+        var response = storeService.createStore(
+                jwt,
+                new CreateStoreRequest(" 2호점 ", "UTC", LocalTime.of(21, 30))
+        );
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.name()).isEqualTo("2호점");
         assertThat(response.timeZone()).isEqualTo("UTC");
+        assertThat(response.closingTime()).isEqualTo(LocalTime.of(21, 30));
 
         ArgumentCaptor<Store> captor = ArgumentCaptor.forClass(Store.class);
         verify(storeRepository).save(captor.capture());
         assertThat(captor.getValue().getOwner()).isSameAs(owner);
+        assertThat(captor.getValue().getClosingTime()).isEqualTo(LocalTime.of(21, 30));
     }
 
     @Test
@@ -100,16 +107,17 @@ class StoreServiceTest {
         when(storeAccessValidator.validate(jwt, 9L)).thenReturn(store);
 
         var response = storeService.updateStore(
-                jwt, 9L, new UpdateStoreRequest(" 변경점 ", "UTC"));
+                jwt, 9L, new UpdateStoreRequest(" 변경점 ", "UTC", LocalTime.of(20, 45)));
 
         assertThat(response.name()).isEqualTo("변경점");
         assertThat(response.timeZone()).isEqualTo("UTC");
+        assertThat(response.closingTime()).isEqualTo(LocalTime.of(20, 45));
     }
 
     @Test
     void rejectsEmptyPatchBeforeAccessingStore() {
         assertThatThrownBy(() -> storeService.updateStore(
-                jwt, 9L, new UpdateStoreRequest(null, null)))
+                jwt, 9L, new UpdateStoreRequest(null, null, null)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
 

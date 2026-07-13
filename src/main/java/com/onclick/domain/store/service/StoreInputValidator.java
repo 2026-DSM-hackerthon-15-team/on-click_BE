@@ -1,6 +1,7 @@
 package com.onclick.domain.store.service;
 
 import java.time.DateTimeException;
+import java.time.LocalTime;
 import java.time.ZoneId;
 
 import com.onclick.domain.store.entity.Store;
@@ -32,5 +33,9 @@ public class StoreInputValidator {
         } catch (DateTimeException exception) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 지점 시간대입니다.");
         }
+    }
+
+    public LocalTime normalizeClosingTime(LocalTime closingTime) {
+        return closingTime == null ? Store.DEFAULT_CLOSING_TIME : closingTime;
     }
 }

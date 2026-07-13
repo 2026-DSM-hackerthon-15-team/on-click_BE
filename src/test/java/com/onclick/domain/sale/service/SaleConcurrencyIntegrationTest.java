@@ -99,10 +99,12 @@ class SaleConcurrencyIntegrationTest {
                                 {
                                   "accountId": "%s",
                                   "password": "%s",
+                                  "name": "동시성 테스트 사용자",
+                                  "email": "%s@example.com",
                                   "storeName": "동시성 테스트 매장",
                                   "timeZone": "Asia/Seoul"
                                 }
-                                """.formatted(accountId, password)))
+                                """.formatted(accountId, password, accountId)))
                 .andExpect(status().isCreated())
                 .andReturn();
         long storeId = body(signUp).required("storeId").asLong();

@@ -2,6 +2,7 @@ package com.onclick.domain.sale.persistence;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import javax.sql.DataSource;
@@ -103,6 +104,31 @@ class SaleSchemaMigrationTest {
 
         assertThatThrownBy(() -> migrateTo(dataSource, "3"))
                 .hasMessageContaining("V3__split_sale_transactions_and_remove_hourly_visitors.sql");
+    }
+
+    @Test
+    void migratesExistingAccountsAndStoresToWorkflowSchema() {
+        DataSource dataSource = dataSource();
+        migrateTo(dataSource, "1");
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        seedLegacySales(jdbc);
+
+        migrateTo(dataSource, "4");
+
+        assertThat(jdbc.queryForObject(
+                "SELECT closing_time FROM stores WHERE id = 10",
+                LocalTime.class
+        )).isEqualTo(LocalTime.of(22, 0));
+        assertThat(jdbc.queryForObject(
+                "SELECT name FROM users WHERE id = 1",
+                String.class
+        )).isNull();
+        assertThat(tableCount(jdbc, "consultings")).isEqualTo(1);
+        assertThat(tableCount(jdbc, "chat_rooms")).isEqualTo(1);
+        assertThat(tableCount(jdbc, "chat_messages")).isEqualTo(1);
+        assertThat(tableCount(jdbc, "media_files")).isEqualTo(1);
+        assertThat(tableCount(jdbc, "marketing_contents")).isEqualTo(1);
+        assertThat(tableCount(jdbc, "instagram_integrations")).isEqualTo(1);
     }
 
     private void seedLegacySales(JdbcTemplate jdbc) {

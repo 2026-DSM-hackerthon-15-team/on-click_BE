@@ -27,44 +27,65 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final StoreInputValidator storeInputValidator;
+    private final UserInputValidator userInputValidator;
 
     public AuthService(
             UserRepository userRepository,
             StoreRepository storeRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
-            StoreInputValidator storeInputValidator
+            StoreInputValidator storeInputValidator,
+            UserInputValidator userInputValidator
     ) {
         this.userRepository = userRepository;
         this.storeRepository = storeRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.storeInputValidator = storeInputValidator;
+        this.userInputValidator = userInputValidator;
     }
 
     @Transactional
     public SignUpResponse signUp(SignUpRequest request) {
-        String accountId = request.accountId().trim();
+        String accountId = userInputValidator.requireAccountId(request.accountId());
+        String name = userInputValidator.requireName(request.name());
+        String email = userInputValidator.requireEmail(request.email());
         if (userRepository.existsByAccountId(accountId)) {
             throw new ApiException(ErrorCode.LOGIN_ID_ALREADY_EXISTS);
+        }
+        if (userRepository.existsByEmail(email)) {
+            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
         User user;
         try {
-            user = userRepository.saveAndFlush(new User(accountId, passwordEncoder.encode(request.password())));
+            user = userRepository.saveAndFlush(new User(
+                    accountId,
+                    passwordEncoder.encode(request.password()),
+                    name,
+                    email
+            ));
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(ErrorCode.LOGIN_ID_ALREADY_EXISTS);
+            throw DuplicateUserExceptionMapper.map(exception, ErrorCode.LOGIN_ID_ALREADY_EXISTS);
         }
 
         String storeName = storeInputValidator.requireName(request.storeName());
         String timeZone = storeInputValidator.normalizeTimeZone(request.timeZone());
-        Store store = storeRepository.save(new Store(user, storeName, timeZone));
+        Store store = storeRepository.save(new Store(
+                user,
+                storeName,
+                timeZone,
+                storeInputValidator.normalizeClosingTime(request.closingTime())
+        ));
 
         return new SignUpResponse(
                 user.getId(),
                 user.getAccountId(),
+                user.getName(),
+                user.getEmail(),
                 store.getId(),
                 store.getName(),
+                store.getClosingTime(),
                 user.getCreatedAt()
         );
     }

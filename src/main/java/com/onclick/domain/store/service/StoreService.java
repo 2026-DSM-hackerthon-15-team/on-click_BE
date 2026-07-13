@@ -56,14 +56,15 @@ public class StoreService {
         Store store = storeRepository.save(new Store(
                 user,
                 storeInputValidator.requireName(request.name()),
-                storeInputValidator.normalizeTimeZone(request.timeZone())
+                storeInputValidator.normalizeTimeZone(request.timeZone()),
+                storeInputValidator.normalizeClosingTime(request.closingTime())
         ));
         return StoreResponse.from(store);
     }
 
     @Transactional
     public StoreResponse updateStore(Jwt jwt, Long storeId, UpdateStoreRequest request) {
-        if (request.name() == null && request.timeZone() == null) {
+        if (request.name() == null && request.timeZone() == null && request.closingTime() == null) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "수정할 지점 정보를 입력해 주세요.");
         }
 
@@ -72,7 +73,7 @@ public class StoreService {
         String timeZone = request.timeZone() == null
                 ? null
                 : storeInputValidator.requireTimeZone(request.timeZone());
-        store.update(name, timeZone);
+        store.update(name, timeZone, request.closingTime());
         return StoreResponse.from(store);
     }
 }
