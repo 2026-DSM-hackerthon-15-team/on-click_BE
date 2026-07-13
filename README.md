@@ -11,6 +11,28 @@
 
 ## 실행
 
+### Docker Compose
+
+저장소 루트의 `.env` 값을 사용해 PostgreSQL과 백엔드를 함께 실행합니다.
+
+```bash
+docker compose up -d --build
+```
+
+백엔드는 기본적으로 `http://localhost:8080`, PostgreSQL은 `localhost:5432`에서 열립니다. 포트와 계정 정보는 `.env`에서 변경할 수 있습니다.
+
+`CORS_ALLOWED_ORIGINS`에는 백엔드 API를 호출할 프론트 origin을 쉼표로 구분해 적습니다. 기본 구성은 배포된 Pages 주소와 로컬 Vite 개발 서버만 허용합니다.
+
+종료할 때는 다음 명령을 사용합니다. 데이터베이스 데이터는 Docker 볼륨에 유지됩니다.
+
+```bash
+docker compose down
+```
+
+볼륨까지 초기화하려면 `docker compose down -v`를 사용합니다.
+
+### 로컬 실행
+
 PostgreSQL을 준비한 뒤 환경 변수를 설정합니다.
 
 ```bash

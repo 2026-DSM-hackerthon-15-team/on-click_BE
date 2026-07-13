@@ -1,0 +1,12 @@
+.git
+.gradle
+.idea
+.vscode
+build
+out
+*.iml
+*.log
+.env
+compose*.yaml
+README.md
+Agents.md
