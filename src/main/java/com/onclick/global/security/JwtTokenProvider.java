@@ -20,11 +20,7 @@ public class JwtTokenProvider {
     private final JwtEncoder jwtEncoder;
     private final Clock clock;
 
-    public JwtTokenProvider(JwtEncoder jwtEncoder) {
-        this(jwtEncoder, Clock.systemUTC());
-    }
-
-    JwtTokenProvider(JwtEncoder jwtEncoder, Clock clock) {
+    public JwtTokenProvider(JwtEncoder jwtEncoder, Clock clock) {
         this.jwtEncoder = jwtEncoder;
         this.clock = clock;
     }
