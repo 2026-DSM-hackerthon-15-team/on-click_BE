@@ -1,9 +1,5 @@
 package com.onclick.domain.dashboard.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -16,15 +12,12 @@ import com.onclick.common.ai.dto.ClosingSalesForecastRequest;
 import com.onclick.common.ai.dto.ClosingSalesForecastResult;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
+import com.onclick.domain.auth.entity.User;
 import com.onclick.domain.product.entity.Product;
-import com.onclick.domain.sale.entity.Sale;
-import com.onclick.domain.sale.repository.SaleRepository;
+import com.onclick.domain.sale.entity.SaleTransaction;
+import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.domain.store.entity.Store;
-import com.onclick.domain.store.entity.StoreRole;
-import com.onclick.domain.store.entity.UserStoreMembership;
 import com.onclick.domain.store.service.StoreAccessValidator;
-import com.onclick.domain.visitor.entity.HourlyVisitorCount;
-import com.onclick.domain.visitor.repository.HourlyVisitorCountRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +26,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceTest {
@@ -45,10 +42,7 @@ class DashboardServiceTest {
     private static final Instant DAY_END = Instant.parse("2026-07-13T15:00:00Z");
 
     @Mock
-    private SaleRepository saleRepository;
-
-    @Mock
-    private HourlyVisitorCountRepository visitorCountRepository;
+    private SaleTransactionRepository saleTransactionRepository;
 
     @Mock
     private StoreAccessValidator storeAccessValidator;
@@ -65,31 +59,27 @@ class DashboardServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         dashboardService = new DashboardService(
-                saleRepository,
-                visitorCountRepository,
+                saleTransactionRepository,
                 storeAccessValidator,
                 aiClient,
                 clock
         );
-
-        Store store = new Store("강남점", STORE_ZONE.getId());
-        UserStoreMembership membership = new UserStoreMembership(null, store, StoreRole.OWNER);
-        given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(membership);
+        given(storeAccessValidator.validate(jwt, STORE_ID))
+                .willReturn(new Store(
+                        new User("dashboard-owner", "password-hash"),
+                        "강남점",
+                        STORE_ZONE.getId()
+                ));
     }
 
     @Test
-    void summaryUsesOnlyCompletedSalesDistinctTransactionsAndVisitorTotal() {
-        List<Sale> sales = List.of(
-                completedSale("TX-1", 1, 2, 5_000, atHour(9, 10)),
-                completedSale("TX-1", 2, 1, 3_000, atHour(9, 20)),
-                completedSale("TX-2", 1, 1, 7_000, atHour(10, 5)),
-                cancelledSale("TX-3", 1, 1, 99_000, atHour(11, 0))
+    void summaryCountsEachCompletedTransactionAsOneOrderAndOneVisitor() {
+        List<SaleTransaction> transactions = List.of(
+                completedTransaction("TX-1", atHour(9, 10), item(1, 2, 5_000), item(2, 1, 3_000)),
+                completedTransaction("TX-2", atHour(10, 5), item(1, 1, 7_000)),
+                cancelledTransaction("TX-3", atHour(11, 0), item(1, 1, 99_000))
         );
-        givenSalesForToday(sales);
-        given(visitorCountRepository.findAllByStoreIdAndBusinessDateOrderByHourAsc(
-                STORE_ID,
-                BUSINESS_DATE
-        )).willReturn(List.of(visitorCount(9, 10), visitorCount(10, 15)));
+        givenTransactionsForToday(transactions);
 
         var response = dashboardService.getSummary(jwt, STORE_ID);
 
@@ -97,20 +87,19 @@ class DashboardServiceTest {
         assertThat(response.businessDate()).isEqualTo(BUSINESS_DATE);
         assertThat(response.totalSalesAmount()).isEqualTo(15_000);
         assertThat(response.orderCount()).isEqualTo(2);
-        assertThat(response.totalVisitors()).isEqualTo(25);
+        assertThat(response.totalVisitors()).isEqualTo(2);
         assertThat(response.generatedAt()).isEqualTo(NOW);
     }
 
     @Test
-    void hourlySalesFillsTwentyFourBucketsAndExcludesCancelledSales() {
-        List<Sale> sales = List.of(
-                completedSale("TX-1", 1, 2, 5_000, atHour(9, 10)),
-                completedSale("TX-1", 2, 1, 3_000, atHour(9, 20)),
-                completedSale("TX-2", 1, 1, 7_000, atHour(10, 5)),
-                completedSale("TX-3", 1, 2, 2_000, atHour(10, 40)),
-                cancelledSale("TX-4", 1, 5, 99_000, atHour(10, 50))
+    void hourlySalesFillsTwentyFourBucketsFromTransactionItemsAndExcludesCancelledTransactions() {
+        List<SaleTransaction> transactions = List.of(
+                completedTransaction("TX-1", atHour(9, 10), item(1, 2, 5_000), item(2, 1, 3_000)),
+                completedTransaction("TX-2", atHour(10, 5), item(1, 1, 7_000)),
+                completedTransaction("TX-3", atHour(10, 40), item(1, 2, 2_000)),
+                cancelledTransaction("TX-4", atHour(10, 50), item(1, 5, 99_000))
         );
-        givenSalesForToday(sales);
+        givenTransactionsForToday(transactions);
 
         var response = dashboardService.getHourlySales(jwt, STORE_ID);
 
@@ -130,11 +119,13 @@ class DashboardServiceTest {
     }
 
     @Test
-    void hourlyVisitorsFillsMissingHoursWithZero() {
-        given(visitorCountRepository.findAllByStoreIdAndBusinessDateOrderByHourAsc(
-                STORE_ID,
-                BUSINESS_DATE
-        )).willReturn(List.of(visitorCount(7, 4), visitorCount(18, 9)));
+    void hourlyVisitorsCountsCompletedTransactionsInsteadOfItems() {
+        List<SaleTransaction> transactions = List.of(
+                completedTransaction("TX-1", atHour(7, 5), item(1, 1, 1_000), item(2, 3, 3_000)),
+                completedTransaction("TX-2", atHour(18, 20), item(1, 1, 2_000)),
+                cancelledTransaction("TX-3", atHour(7, 40), item(1, 1, 5_000))
+        );
+        givenTransactionsForToday(transactions);
 
         var response = dashboardService.getHourlyVisitors(jwt, STORE_ID);
 
@@ -142,19 +133,19 @@ class DashboardServiceTest {
         assertThat(response.hourly()).extracting(item -> item.hour())
                 .containsExactlyElementsOf(java.util.stream.IntStream.range(0, 24).boxed().toList());
         assertThat(response.hourly().get(6).visitorCount()).isZero();
-        assertThat(response.hourly().get(7).visitorCount()).isEqualTo(4);
-        assertThat(response.hourly().get(18).visitorCount()).isEqualTo(9);
+        assertThat(response.hourly().get(7).visitorCount()).isEqualTo(1);
+        assertThat(response.hourly().get(18).visitorCount()).isEqualTo(1);
         assertThat(response.hourly().get(19).visitorCount()).isZero();
-        assertThat(response.totalVisitors()).isEqualTo(13);
+        assertThat(response.totalVisitors()).isEqualTo(2);
     }
 
     @Test
-    void forecastsMapAiClientResultsAndObservedSales() {
+    void forecastsKeepPublicContractAndUseCompletedTransactionSales() {
         Instant generatedAt = Instant.parse("2026-07-13T06:00:30Z");
-        givenSalesForToday(List.of(
-                completedSale("TX-1", 1, 2, 8_000, atHour(9, 10)),
-                completedSale("TX-2", 1, 1, 2_000, atHour(10, 5)),
-                cancelledSale("TX-3", 1, 1, 90_000, atHour(11, 0))
+        givenTransactionsForToday(List.of(
+                completedTransaction("TX-1", atHour(9, 10), item(1, 2, 8_000)),
+                completedTransaction("TX-2", atHour(10, 5), item(1, 1, 2_000)),
+                cancelledTransaction("TX-3", atHour(11, 0), item(1, 1, 90_000))
         ));
         ClosingSalesForecastRequest closingRequest = new ClosingSalesForecastRequest(STORE_ID, BUSINESS_DATE);
         TomorrowVisitorsForecastRequest visitorsRequest = new TomorrowVisitorsForecastRequest(
@@ -179,44 +170,40 @@ class DashboardServiceTest {
         verify(aiClient).forecastTomorrowVisitors(visitorsRequest);
     }
 
-    private void givenSalesForToday(List<Sale> sales) {
-        given(saleRepository
+    private void givenTransactionsForToday(List<SaleTransaction> transactions) {
+        given(saleTransactionRepository
                 .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
                         STORE_ID,
                         DAY_START,
                         DAY_END
                 ))
-                .willReturn(sales);
+                .willReturn(transactions);
     }
 
-    private Sale completedSale(
-            String transactionId,
-            int lineNo,
-            int quantity,
-            long paidAmount,
-            Instant soldAt
+    private SaleTransaction completedTransaction(
+            String clientTransactionId,
+            Instant soldAt,
+            Item... items
     ) {
-        return Sale.create(
-                STORE_ID,
-                transactionId,
-                lineNo,
-                product(),
-                quantity,
-                paidAmount,
-                soldAt
-        );
+        SaleTransaction transaction = SaleTransaction.create(STORE_ID, clientTransactionId, soldAt);
+        for (Item item : items) {
+            transaction.addItem(item.lineNo(), product(), item.quantity(), item.paidAmount());
+        }
+        return transaction;
     }
 
-    private Sale cancelledSale(
-            String transactionId,
-            int lineNo,
-            int quantity,
-            long paidAmount,
-            Instant soldAt
+    private SaleTransaction cancelledTransaction(
+            String clientTransactionId,
+            Instant soldAt,
+            Item... items
     ) {
-        Sale sale = completedSale(transactionId, lineNo, quantity, paidAmount, soldAt);
-        sale.cancel(NOW);
-        return sale;
+        SaleTransaction transaction = completedTransaction(clientTransactionId, soldAt, items);
+        transaction.cancel(NOW);
+        return transaction;
+    }
+
+    private Item item(int lineNo, int quantity, long paidAmount) {
+        return new Item(lineNo, quantity, paidAmount);
     }
 
     private Product product() {
@@ -225,11 +212,10 @@ class DashboardServiceTest {
         return product;
     }
 
-    private HourlyVisitorCount visitorCount(int hour, long count) {
-        return new HourlyVisitorCount(STORE_ID, BUSINESS_DATE, hour, count, NOW);
-    }
-
     private Instant atHour(int hour, int minute) {
         return BUSINESS_DATE.atTime(hour, minute).atZone(STORE_ZONE).toInstant();
+    }
+
+    private record Item(int lineNo, int quantity, long paidAmount) {
     }
 }

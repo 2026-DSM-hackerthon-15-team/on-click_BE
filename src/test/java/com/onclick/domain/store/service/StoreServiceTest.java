@@ -8,10 +8,7 @@ import com.onclick.domain.auth.repository.UserRepository;
 import com.onclick.domain.store.dto.CreateStoreRequest;
 import com.onclick.domain.store.dto.UpdateStoreRequest;
 import com.onclick.domain.store.entity.Store;
-import com.onclick.domain.store.entity.StoreRole;
-import com.onclick.domain.store.entity.UserStoreMembership;
 import com.onclick.domain.store.repository.StoreRepository;
-import com.onclick.domain.store.repository.UserStoreMembershipRepository;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 import com.onclick.global.security.JwtUserIdResolver;
@@ -40,8 +37,6 @@ class StoreServiceTest {
     @Mock
     private StoreRepository storeRepository;
     @Mock
-    private UserStoreMembershipRepository membershipRepository;
-    @Mock
     private StoreAccessValidator storeAccessValidator;
     @Mock
     private JwtUserIdResolver userIdResolver;
@@ -55,7 +50,6 @@ class StoreServiceTest {
         storeService = new StoreService(
                 userRepository,
                 storeRepository,
-                membershipRepository,
                 storeAccessValidator,
                 new StoreInputValidator(),
                 userIdResolver
@@ -63,55 +57,47 @@ class StoreServiceTest {
     }
 
     @Test
-    void listsOnlyAuthenticatedUsersMemberships() {
-        Store store = store(9L, "1호점", "Asia/Seoul");
-        UserStoreMembership membership = new UserStoreMembership(
-                new User("owner01", "hash"), store, StoreRole.OWNER);
+    void listsOnlyStoresOwnedByAuthenticatedUser() {
+        User owner = user(5L);
+        Store store = store(9L, owner, "1호점", "Asia/Seoul");
         when(userIdResolver.resolve(jwt)).thenReturn(5L);
-        when(membershipRepository.findAllByUserIdOrderByStoreIdAsc(5L))
-                .thenReturn(List.of(membership));
+        when(storeRepository.findAllByOwnerIdOrderByIdAsc(5L)).thenReturn(List.of(store));
 
         var stores = storeService.getStores(jwt);
 
         assertThat(stores).singleElement().satisfies(response -> {
             assertThat(response.id()).isEqualTo(9L);
             assertThat(response.name()).isEqualTo("1호점");
-            assertThat(response.role()).isEqualTo(StoreRole.OWNER);
+            assertThat(response.timeZone()).isEqualTo("Asia/Seoul");
         });
     }
 
     @Test
-    void createsAdditionalStoreWithOwnerMembership() {
-        User user = new User("owner01", "hash");
+    void createsAdditionalStoreOwnedByAuthenticatedUser() {
+        User owner = user(5L);
         when(userIdResolver.resolve(jwt)).thenReturn(5L);
-        when(userRepository.findById(5L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(5L)).thenReturn(Optional.of(owner));
         when(storeRepository.save(any(Store.class))).thenAnswer(invocation -> {
             Store store = invocation.getArgument(0);
             ReflectionTestUtils.setField(store, "id", 10L);
             return store;
         });
-        when(membershipRepository.save(any(UserStoreMembership.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = storeService.createStore(jwt, new CreateStoreRequest(" 2호점 ", "UTC"));
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.name()).isEqualTo("2호점");
         assertThat(response.timeZone()).isEqualTo("UTC");
-        assertThat(response.role()).isEqualTo(StoreRole.OWNER);
 
-        ArgumentCaptor<UserStoreMembership> captor =
-                ArgumentCaptor.forClass(UserStoreMembership.class);
-        verify(membershipRepository).save(captor.capture());
-        assertThat(captor.getValue().getRole()).isEqualTo(StoreRole.OWNER);
+        ArgumentCaptor<Store> captor = ArgumentCaptor.forClass(Store.class);
+        verify(storeRepository).save(captor.capture());
+        assertThat(captor.getValue().getOwner()).isSameAs(owner);
     }
 
     @Test
-    void onlyOwnerCanUpdateStoreAndTimeZoneIsValidated() {
-        Store store = store(9L, "1호점", "Asia/Seoul");
-        UserStoreMembership membership = new UserStoreMembership(
-                new User("owner01", "hash"), store, StoreRole.OWNER);
-        when(storeAccessValidator.requireOwner(jwt, 9L)).thenReturn(membership);
+    void updatesStoreOnlyAfterOwnerValidation() {
+        Store store = store(9L, user(5L), "1호점", "Asia/Seoul");
+        when(storeAccessValidator.validate(jwt, 9L)).thenReturn(store);
 
         var response = storeService.updateStore(
                 jwt, 9L, new UpdateStoreRequest(" 변경점 ", "UTC"));
@@ -127,11 +113,17 @@ class StoreServiceTest {
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
 
-        verify(storeAccessValidator, never()).requireOwner(any(), any());
+        verify(storeAccessValidator, never()).validate(any(), any());
     }
 
-    private Store store(Long id, String name, String timeZone) {
-        Store store = new Store(name, timeZone);
+    private User user(Long id) {
+        User user = new User("owner01", "hash");
+        ReflectionTestUtils.setField(user, "id", id);
+        return user;
+    }
+
+    private Store store(Long id, User owner, String name, String timeZone) {
+        Store store = new Store(owner, name, timeZone);
         ReflectionTestUtils.setField(store, "id", id);
         return store;
     }

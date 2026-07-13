@@ -74,7 +74,7 @@ class SecurityConfigTest {
                 "https://aaaaaa-ead.pages.dev",
                 "http://localhost:5173"
         );
-        assertThat(cors.getAllowedMethods()).containsExactly("GET", "POST", "PUT", "PATCH");
+        assertThat(cors.getAllowedMethods()).containsExactly("GET", "POST", "PUT", "PATCH", "DELETE");
         assertThat(cors.getAllowedHeaders()).containsExactly("Authorization", "Content-Type");
         assertThat(cors.getAllowCredentials()).isFalse();
         assertThat(cors.getMaxAge()).isEqualTo(3600L);

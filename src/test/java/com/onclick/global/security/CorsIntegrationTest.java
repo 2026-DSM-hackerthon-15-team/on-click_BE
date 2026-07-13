@@ -61,11 +61,12 @@ class CorsIntegrationTest {
     }
 
     @Test
-    void rejectsUnsupportedMethodAndLegacyStoreHeader() throws Exception {
+    void allowsDeleteButRejectsLegacyStoreHeader() throws Exception {
         mockMvc.perform(options("/stores/1/products")
                         .header(HttpHeaders.ORIGIN, FRONTEND_ORIGIN)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "DELETE"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, FRONTEND_ORIGIN));
 
         mockMvc.perform(options("/stores/1/products")
                         .header(HttpHeaders.ORIGIN, FRONTEND_ORIGIN)

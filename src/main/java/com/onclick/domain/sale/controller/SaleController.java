@@ -38,12 +38,12 @@ public class SaleController {
         return ResponseEntity.status(status).body(result.transaction());
     }
 
-    @PostMapping("/{transactionId}/cancel")
+    @PostMapping("/{saleId}/cancel")
     public SaleTransactionResponse cancelTransaction(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long storeId,
-            @PathVariable String transactionId
+            @PathVariable Long saleId
     ) {
-        return saleService.cancelTransaction(jwt, storeId, transactionId);
+        return saleService.cancelTransaction(jwt, storeId, saleId);
     }
 }

@@ -3,11 +3,16 @@ package com.onclick.domain.store.entity;
 import java.time.Instant;
 import java.time.ZoneId;
 
+import com.onclick.domain.auth.entity.User;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -21,6 +26,10 @@ public class Store {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "owner_user_id", nullable = false)
+    private User owner;
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -37,7 +46,8 @@ public class Store {
     protected Store() {
     }
 
-    public Store(String name, String timeZone) {
+    public Store(User owner, String name, String timeZone) {
+        this.owner = java.util.Objects.requireNonNull(owner, "owner must not be null");
         this.name = name;
         this.timeZone = timeZone;
     }
@@ -70,6 +80,14 @@ public class Store {
 
     public Long getId() {
         return id;
+    }
+
+    public User getOwner() {
+        return owner;
+    }
+
+    public Long getOwnerUserId() {
+        return owner.getId();
     }
 
     public String getName() {

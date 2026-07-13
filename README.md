@@ -1,6 +1,6 @@
 # ON:CLICK Backend
 
-소상공인 매장의 상품, POS형 판매·방문자 원장과 대시보드를 제공하는 Spring Boot API입니다.
+소상공인 매장의 상품, POS형 판매 원장과 대시보드를 제공하는 Spring Boot API입니다.
 
 ## 기술 구성
 
@@ -54,12 +54,14 @@ export JWT_SECRET=32바이트_이상의_안전한_비밀키
 - 인증: `POST /auth/signup`, `POST /auth/login`
 - 지점: `GET/POST /stores`, `PATCH /stores/{storeId}`
 - 상품: `/stores/{storeId}/products`
-- POS 판매: `/stores/{storeId}/sales/transactions`
-- 방문자 입력: `PUT /stores/{storeId}/visitors/hourly`
+- POS 판매 등록: `POST /stores/{storeId}/sales/transactions`
+- POS 판매 취소: `POST /stores/{storeId}/sales/transactions/{saleId}/cancel`
 - 대시보드: `/stores/{storeId}/dashboard/*`
 
-보호 API는 `Authorization: Bearer {accessToken}`을 요구합니다. 경로의 `storeId`는 JWT 사용자의 지점 멤버십과 항상 대조합니다.
+판매 등록 시 서버가 결제 묶음의 `saleId`를 발급하며, POS 재전송 중복 방지가 필요한 경우 `clientTransactionId`를 선택적으로 전달할 수 있습니다. 완료된 결제 한 건을 주문 한 건이자 방문자 한 명으로 집계하고, 취소 결제는 매출·주문·방문자 집계에서 제외합니다.
+
+보호 API는 `Authorization: Bearer {accessToken}`을 요구합니다. 경로의 `storeId`는 JWT 사용자가 소유한 매장인지 항상 대조합니다.
 
 ## 외부 연동 경계
 
-POS 데이터는 판매·방문자 입력 API를 통해 수집합니다. 마감 매출과 내일 방문자 예측은 `AiClient`를 통해 제공하며, 실행 환경의 provider와 관계없이 프론트에는 동일한 정상 응답 계약을 보장합니다.
+POS 데이터는 판매 API를 통해 수집합니다. 방문자 수는 완료된 결제 건수에서 계산합니다. 마감 매출과 내일 방문자 예측은 `AiClient`를 통해 제공하며, 실행 환경의 provider와 관계없이 프론트에는 동일한 정상 응답 계약을 보장합니다.

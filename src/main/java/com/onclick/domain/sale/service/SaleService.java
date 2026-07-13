@@ -1,19 +1,18 @@
 package com.onclick.domain.sale.service;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.onclick.domain.product.entity.Product;
-import com.onclick.domain.product.repository.ProductRepository;
 import com.onclick.domain.sale.dto.SaleItemRequest;
 import com.onclick.domain.sale.dto.SaleTransactionCreateRequest;
 import com.onclick.domain.sale.dto.SaleTransactionResponse;
-import com.onclick.domain.sale.entity.Sale;
-import com.onclick.domain.sale.repository.SaleRepository;
+import com.onclick.domain.sale.entity.SaleItem;
+import com.onclick.domain.sale.entity.SaleTransaction;
 import com.onclick.domain.store.service.StoreAccessValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
@@ -21,123 +20,91 @@ import com.onclick.global.error.ErrorCode;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SaleService {
 
-    private final SaleRepository saleRepository;
-    private final ProductRepository productRepository;
+    private final SaleTransactionExecutor transactionExecutor;
     private final StoreAccessValidator storeAccessValidator;
+    private final Clock clock;
 
     public SaleService(
-            SaleRepository saleRepository,
-            ProductRepository productRepository,
-            StoreAccessValidator storeAccessValidator
+            SaleTransactionExecutor transactionExecutor,
+            StoreAccessValidator storeAccessValidator,
+            Clock clock
     ) {
-        this.saleRepository = saleRepository;
-        this.productRepository = productRepository;
+        this.transactionExecutor = transactionExecutor;
         this.storeAccessValidator = storeAccessValidator;
+        this.clock = clock;
     }
 
-    @Transactional
     public SaleTransactionResult createTransaction(
             Jwt jwt,
             Long storeId,
             SaleTransactionCreateRequest request
     ) {
         storeAccessValidator.validate(jwt, storeId);
-        String transactionId = normalizeTransactionId(request.transactionId());
+        String clientTransactionId = normalizeClientTransactionId(request.clientTransactionId());
+        Instant soldAt = normalizeDatabaseInstant(request.soldAt());
         validateUniqueLineNumbers(request.items());
 
-        List<Sale> existing = saleRepository
-                .findAllByStoreIdAndTransactionIdOrderByLineNoAsc(storeId, transactionId);
-        if (!existing.isEmpty()) {
-            if (!hasSamePayload(existing, request)) {
-                throw transactionConflict();
+        if (clientTransactionId != null) {
+            SaleTransaction existing = transactionExecutor
+                    .findByClientTransactionId(storeId, clientTransactionId)
+                    .orElse(null);
+            if (existing != null) {
+                return existingResult(existing, soldAt, request);
             }
-            return new SaleTransactionResult(SaleTransactionResponse.from(existing), false);
         }
 
-        Map<Long, Product> products = loadProducts(storeId, request.items());
-        List<Sale> sales = request.items().stream()
-                .map(item -> createSale(storeId, transactionId, request.soldAt(), item, products))
-                .toList();
-
         try {
-            List<Sale> saved = saleRepository.saveAllAndFlush(sales);
+            SaleTransaction saved = transactionExecutor.create(
+                    storeId,
+                    clientTransactionId,
+                    soldAt,
+                    request.items()
+            );
             return new SaleTransactionResult(SaleTransactionResponse.from(saved), true);
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(
-                    ErrorCode.SALE_TRANSACTION_CONFLICT,
-                    ErrorCode.SALE_TRANSACTION_CONFLICT.defaultMessage(),
-                    exception
+            if (clientTransactionId == null) {
+                throw exception;
+            }
+
+            SaleTransaction concurrentWinner = transactionExecutor
+                    .findByClientTransactionId(storeId, clientTransactionId)
+                    .orElseThrow(() -> transactionConflict(exception));
+            if (!hasSamePayload(concurrentWinner, soldAt, request)) {
+                throw transactionConflict(exception);
+            }
+            return new SaleTransactionResult(
+                    SaleTransactionResponse.from(concurrentWinner),
+                    false
             );
         }
     }
 
-    @Transactional
-    public SaleTransactionResponse cancelTransaction(Jwt jwt, Long storeId, String transactionId) {
+    public SaleTransactionResponse cancelTransaction(Jwt jwt, Long storeId, Long saleId) {
         storeAccessValidator.validate(jwt, storeId);
-        String normalizedTransactionId = normalizeTransactionId(transactionId);
-        List<Sale> sales = saleRepository.findAllByStoreIdAndTransactionIdOrderByLineNoAsc(
+        SaleTransaction transaction = transactionExecutor.cancel(
                 storeId,
-                normalizedTransactionId
+                saleId,
+                normalizeDatabaseInstant(clock.instant())
         );
-        if (sales.isEmpty()) {
-            throw new ApiException(ErrorCode.SALE_TRANSACTION_NOT_FOUND);
-        }
-
-        Instant cancelledAt = Instant.now();
-        sales.forEach(sale -> sale.cancel(cancelledAt));
-        return SaleTransactionResponse.from(sales);
+        return SaleTransactionResponse.from(transaction);
     }
 
-    private Map<Long, Product> loadProducts(Long storeId, List<SaleItemRequest> items) {
-        Set<Long> productIds = items.stream()
-                .map(SaleItemRequest::productId)
-                .collect(java.util.stream.Collectors.toSet());
-        List<Product> products = productRepository.findAllByStoreIdAndIdIn(storeId, productIds);
-        if (products.size() != productIds.size()) {
-            throw new ApiException(ErrorCode.PRODUCT_NOT_FOUND);
-        }
-
-        Map<Long, Product> productsById = new HashMap<>();
-        for (Product product : products) {
-            productsById.put(product.getId(), product);
-            if (!product.isActive()) {
-                throw new ApiException(
-                        ErrorCode.INVALID_REQUEST,
-                        "판매 중지된 상품은 판매할 수 없습니다: " + product.getId()
-                );
-            }
-        }
-        return productsById;
-    }
-
-    private Sale createSale(
-            Long storeId,
-            String transactionId,
-            Instant soldAt,
-            SaleItemRequest item,
-            Map<Long, Product> products
+    private SaleTransactionResult existingResult(
+            SaleTransaction existing,
+            Instant normalizedSoldAt,
+            SaleTransactionCreateRequest request
     ) {
-        Product product = products.get(item.productId());
-        if (product == null) {
-            throw new ApiException(ErrorCode.PRODUCT_NOT_FOUND);
+        if (!hasSamePayload(existing, normalizedSoldAt, request)) {
+            throw transactionConflict();
         }
-        return Sale.create(
-                storeId,
-                transactionId,
-                item.lineNo(),
-                product,
-                item.quantity(),
-                item.paidAmount(),
-                soldAt
-        );
+        return new SaleTransactionResult(SaleTransactionResponse.from(existing), false);
     }
 
-    private void validateUniqueLineNumbers(List<SaleItemRequest> items) {
+    private void validateUniqueLineNumbers(java.util.List<SaleItemRequest> items) {
         Set<Integer> lineNumbers = new HashSet<>();
         for (SaleItemRequest item : items) {
             if (!lineNumbers.add(item.lineNo())) {
@@ -146,40 +113,53 @@ public class SaleService {
         }
     }
 
-    private boolean hasSamePayload(List<Sale> existing, SaleTransactionCreateRequest request) {
-        if (existing.size() != request.items().size()) {
+    private boolean hasSamePayload(
+            SaleTransaction existing,
+            Instant normalizedSoldAt,
+            SaleTransactionCreateRequest request
+    ) {
+        if (!normalizeDatabaseInstant(existing.getSoldAt()).equals(normalizedSoldAt)
+                || existing.getItems().size() != request.items().size()) {
             return false;
         }
 
-        Map<Integer, Sale> existingByLineNumber = new HashMap<>();
-        for (Sale sale : existing) {
-            if (!sale.getSoldAt().equals(request.soldAt())) {
-                return false;
-            }
-            existingByLineNumber.put(sale.getLineNo(), sale);
+        Map<Integer, SaleItem> existingByLineNumber = new HashMap<>();
+        for (SaleItem item : existing.getItems()) {
+            existingByLineNumber.put(item.getLineNo(), item);
         }
 
         for (SaleItemRequest item : request.items()) {
-            Sale sale = existingByLineNumber.get(item.lineNo());
-            if (sale == null
-                    || !sale.getProduct().getId().equals(item.productId())
-                    || sale.getQuantity() != item.quantity()
-                    || sale.getPaidAmount() != item.paidAmount()) {
+            SaleItem existingItem = existingByLineNumber.get(item.lineNo());
+            if (existingItem == null
+                    || !existingItem.getProduct().getId().equals(item.productId())
+                    || existingItem.getQuantity() != item.quantity()
+                    || existingItem.getPaidAmount() != item.paidAmount()) {
                 return false;
             }
         }
         return true;
     }
 
-    private String normalizeTransactionId(String transactionId) {
-        String normalized = transactionId == null ? "" : transactionId.trim();
-        if (normalized.isEmpty()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "거래번호를 입력해 주세요.");
+    private String normalizeClientTransactionId(String clientTransactionId) {
+        if (clientTransactionId == null || clientTransactionId.isBlank()) {
+            return null;
         }
-        return normalized;
+        return clientTransactionId.trim();
+    }
+
+    private Instant normalizeDatabaseInstant(Instant value) {
+        return value.truncatedTo(ChronoUnit.MICROS);
     }
 
     private ApiException transactionConflict() {
         return new ApiException(ErrorCode.SALE_TRANSACTION_CONFLICT);
+    }
+
+    private ApiException transactionConflict(Throwable cause) {
+        return new ApiException(
+                ErrorCode.SALE_TRANSACTION_CONFLICT,
+                ErrorCode.SALE_TRANSACTION_CONFLICT.defaultMessage(),
+                cause
+        );
     }
 }

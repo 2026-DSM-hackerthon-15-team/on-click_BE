@@ -1,5 +1,12 @@
 package com.onclick.domain.dashboard.service;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+
 import com.onclick.common.ai.AiClient;
 import com.onclick.common.ai.dto.ClosingSalesForecastRequest;
 import com.onclick.common.ai.dto.ClosingSalesForecastResult;
@@ -12,27 +19,15 @@ import com.onclick.domain.dashboard.dto.HourlySalesResponse;
 import com.onclick.domain.dashboard.dto.HourlyVisitorItem;
 import com.onclick.domain.dashboard.dto.HourlyVisitorsResponse;
 import com.onclick.domain.dashboard.dto.TomorrowVisitorsForecastResponse;
-import com.onclick.domain.sale.entity.Sale;
 import com.onclick.domain.sale.entity.SaleStatus;
-import com.onclick.domain.sale.repository.SaleRepository;
+import com.onclick.domain.sale.entity.SaleTransaction;
+import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.domain.store.entity.Store;
 import com.onclick.domain.store.service.StoreAccessValidator;
-import com.onclick.domain.visitor.entity.HourlyVisitorCount;
-import com.onclick.domain.visitor.repository.HourlyVisitorCountRepository;
+
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)
@@ -41,21 +36,18 @@ public class DashboardService {
     private static final int HOURS_PER_DAY = 24;
     private static final String CURRENCY = "KRW";
 
-    private final SaleRepository saleRepository;
-    private final HourlyVisitorCountRepository visitorCountRepository;
+    private final SaleTransactionRepository saleTransactionRepository;
     private final StoreAccessValidator storeAccessValidator;
     private final AiClient aiClient;
     private final Clock clock;
 
     public DashboardService(
-            SaleRepository saleRepository,
-            HourlyVisitorCountRepository visitorCountRepository,
+            SaleTransactionRepository saleTransactionRepository,
             StoreAccessValidator storeAccessValidator,
             AiClient aiClient,
             Clock clock
     ) {
-        this.saleRepository = saleRepository;
-        this.visitorCountRepository = visitorCountRepository;
+        this.saleTransactionRepository = saleTransactionRepository;
         this.storeAccessValidator = storeAccessValidator;
         this.aiClient = aiClient;
         this.clock = clock;
@@ -64,18 +56,20 @@ public class DashboardService {
     public DashboardSummaryResponse getSummary(Jwt jwt, Long storeId) {
         Store store = accessibleStore(jwt, storeId);
         LocalDate businessDate = today(store);
-        List<Sale> sales = completedSales(storeId, businessDate, store.zoneId());
-        List<HourlyVisitorCount> visitors = visitorCountRepository
-                .findAllByStoreIdAndBusinessDateOrderByHourAsc(storeId, businessDate);
+        List<SaleTransaction> transactions = completedTransactions(
+                storeId,
+                businessDate,
+                store.zoneId()
+        );
 
         return new DashboardSummaryResponse(
                 storeId,
                 businessDate,
                 store.getTimeZone(),
                 CURRENCY,
-                totalSales(sales),
-                sales.stream().map(Sale::getTransactionId).distinct().count(),
-                visitors.stream().mapToLong(HourlyVisitorCount::getVisitorCount).sum(),
+                totalSales(transactions),
+                transactions.size(),
+                transactions.size(),
                 clock.instant()
         );
     }
@@ -83,16 +77,20 @@ public class DashboardService {
     public HourlySalesResponse getHourlySales(Jwt jwt, Long storeId) {
         Store store = accessibleStore(jwt, storeId);
         LocalDate businessDate = today(store);
-        List<Sale> sales = completedSales(storeId, businessDate, store.zoneId());
+        List<SaleTransaction> transactions = completedTransactions(
+                storeId,
+                businessDate,
+                store.zoneId()
+        );
 
         long[] amounts = new long[HOURS_PER_DAY];
         long[] quantities = new long[HOURS_PER_DAY];
-        List<Set<String>> transactions = transactionSets();
-        for (Sale sale : sales) {
-            int hour = sale.getSoldAt().atZone(store.zoneId()).getHour();
-            amounts[hour] = Math.addExact(amounts[hour], sale.getPaidAmount());
-            quantities[hour] = Math.addExact(quantities[hour], sale.getQuantity());
-            transactions.get(hour).add(sale.getTransactionId());
+        long[] orderCounts = new long[HOURS_PER_DAY];
+        for (SaleTransaction transaction : transactions) {
+            int hour = transaction.getSoldAt().atZone(store.zoneId()).getHour();
+            amounts[hour] = Math.addExact(amounts[hour], transaction.totalPaidAmount());
+            quantities[hour] = Math.addExact(quantities[hour], transaction.totalQuantity());
+            orderCounts[hour] = Math.addExact(orderCounts[hour], 1L);
         }
 
         List<HourlySalesItem> hourly = new ArrayList<>(HOURS_PER_DAY);
@@ -101,7 +99,7 @@ public class DashboardService {
                     hour,
                     amounts[hour],
                     quantities[hour],
-                    transactions.get(hour).size()
+                    orderCounts[hour]
             ));
         }
 
@@ -112,7 +110,7 @@ public class DashboardService {
                 CURRENCY,
                 sum(amounts),
                 sum(quantities),
-                sales.stream().map(Sale::getTransactionId).distinct().count(),
+                transactions.size(),
                 hourly
         );
     }
@@ -120,26 +118,28 @@ public class DashboardService {
     public HourlyVisitorsResponse getHourlyVisitors(Jwt jwt, Long storeId) {
         Store store = accessibleStore(jwt, storeId);
         LocalDate businessDate = today(store);
-        List<HourlyVisitorCount> counts = visitorCountRepository
-                .findAllByStoreIdAndBusinessDateOrderByHourAsc(storeId, businessDate);
-        Map<Integer, Long> countsByHour = new HashMap<>();
-        for (HourlyVisitorCount count : counts) {
-            countsByHour.put(count.getHour(), count.getVisitorCount());
+        List<SaleTransaction> transactions = completedTransactions(
+                storeId,
+                businessDate,
+                store.zoneId()
+        );
+
+        long[] visitors = new long[HOURS_PER_DAY];
+        for (SaleTransaction transaction : transactions) {
+            int hour = transaction.getSoldAt().atZone(store.zoneId()).getHour();
+            visitors[hour] = Math.addExact(visitors[hour], 1L);
         }
 
         List<HourlyVisitorItem> hourly = new ArrayList<>(HOURS_PER_DAY);
-        long totalVisitors = 0;
         for (int hour = 0; hour < HOURS_PER_DAY; hour++) {
-            long visitorCount = countsByHour.getOrDefault(hour, 0L);
-            totalVisitors = Math.addExact(totalVisitors, visitorCount);
-            hourly.add(new HourlyVisitorItem(hour, visitorCount));
+            hourly.add(new HourlyVisitorItem(hour, visitors[hour]));
         }
 
         return new HourlyVisitorsResponse(
                 storeId,
                 businessDate,
                 store.getTimeZone(),
-                totalVisitors,
+                transactions.size(),
                 hourly
         );
     }
@@ -147,7 +147,7 @@ public class DashboardService {
     public ClosingSalesForecastResponse getClosingSalesForecast(Jwt jwt, Long storeId) {
         Store store = accessibleStore(jwt, storeId);
         LocalDate businessDate = today(store);
-        long observedSales = totalSales(completedSales(storeId, businessDate, store.zoneId()));
+        long observedSales = totalSales(completedTransactions(storeId, businessDate, store.zoneId()));
         ClosingSalesForecastResult result = aiClient.forecastClosingSales(
                 new ClosingSalesForecastRequest(storeId, businessDate)
         );
@@ -176,27 +176,35 @@ public class DashboardService {
     }
 
     private Store accessibleStore(Jwt jwt, Long storeId) {
-        return storeAccessValidator.validate(jwt, storeId).getStore();
+        return storeAccessValidator.validate(jwt, storeId);
     }
 
     private LocalDate today(Store store) {
         return LocalDate.now(clock.withZone(store.zoneId()));
     }
 
-    private List<Sale> completedSales(Long storeId, LocalDate date, ZoneId zoneId) {
+    private List<SaleTransaction> completedTransactions(
+            Long storeId,
+            LocalDate date,
+            ZoneId zoneId
+    ) {
         Instant from = date.atStartOfDay(zoneId).toInstant();
         Instant to = date.plusDays(1).atStartOfDay(zoneId).toInstant();
-        return saleRepository
-                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(storeId, from, to)
+        return saleTransactionRepository
+                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
+                        storeId,
+                        from,
+                        to
+                )
                 .stream()
-                .filter(sale -> sale.getStatus() == SaleStatus.COMPLETED)
+                .filter(transaction -> transaction.getStatus() == SaleStatus.COMPLETED)
                 .toList();
     }
 
-    private long totalSales(List<Sale> sales) {
+    private long totalSales(List<SaleTransaction> transactions) {
         long total = 0;
-        for (Sale sale : sales) {
-            total = Math.addExact(total, sale.getPaidAmount());
+        for (SaleTransaction transaction : transactions) {
+            total = Math.addExact(total, transaction.totalPaidAmount());
         }
         return total;
     }
@@ -207,13 +215,5 @@ public class DashboardService {
             total = Math.addExact(total, value);
         }
         return total;
-    }
-
-    private List<Set<String>> transactionSets() {
-        List<Set<String>> result = new ArrayList<>(HOURS_PER_DAY);
-        for (int hour = 0; hour < HOURS_PER_DAY; hour++) {
-            result.add(new HashSet<>());
-        }
-        return result;
     }
 }

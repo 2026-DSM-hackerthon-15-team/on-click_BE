@@ -8,10 +8,7 @@ import com.onclick.domain.auth.dto.SignUpRequest;
 import com.onclick.domain.auth.entity.User;
 import com.onclick.domain.auth.repository.UserRepository;
 import com.onclick.domain.store.entity.Store;
-import com.onclick.domain.store.entity.StoreRole;
-import com.onclick.domain.store.entity.UserStoreMembership;
 import com.onclick.domain.store.repository.StoreRepository;
-import com.onclick.domain.store.repository.UserStoreMembershipRepository;
 import com.onclick.domain.store.service.StoreInputValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
@@ -42,8 +39,6 @@ class AuthServiceTest {
     @Mock
     private StoreRepository storeRepository;
     @Mock
-    private UserStoreMembershipRepository membershipRepository;
-    @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
     private JwtTokenProvider jwtTokenProvider;
@@ -55,7 +50,6 @@ class AuthServiceTest {
         authService = new AuthService(
                 userRepository,
                 storeRepository,
-                membershipRepository,
                 passwordEncoder,
                 jwtTokenProvider,
                 new StoreInputValidator()
@@ -63,7 +57,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void signUpCreatesUserInitialStoreAndOwnerMembershipWithoutToken() {
+    void signUpCreatesUserAndInitialOwnedStoreWithoutToken() {
         when(userRepository.existsByAccountId("owner01")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("bcrypt-hash");
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
@@ -92,11 +86,10 @@ class AuthServiceTest {
         assertThat(userCaptor.getValue().getAccountId()).isEqualTo("owner01");
         assertThat(userCaptor.getValue().getPasswordHash()).isEqualTo("bcrypt-hash");
 
-        ArgumentCaptor<UserStoreMembership> membershipCaptor =
-                ArgumentCaptor.forClass(UserStoreMembership.class);
-        verify(membershipRepository).save(membershipCaptor.capture());
-        assertThat(membershipCaptor.getValue().getRole()).isEqualTo(StoreRole.OWNER);
-        assertThat(membershipCaptor.getValue().getStore().getTimeZone()).isEqualTo("Asia/Seoul");
+        ArgumentCaptor<Store> storeCaptor = ArgumentCaptor.forClass(Store.class);
+        verify(storeRepository).save(storeCaptor.capture());
+        assertThat(storeCaptor.getValue().getOwner()).isSameAs(userCaptor.getValue());
+        assertThat(storeCaptor.getValue().getTimeZone()).isEqualTo("Asia/Seoul");
     }
 
     @Test

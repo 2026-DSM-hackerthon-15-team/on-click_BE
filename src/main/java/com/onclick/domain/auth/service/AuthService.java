@@ -7,10 +7,7 @@ import com.onclick.domain.auth.dto.SignUpResponse;
 import com.onclick.domain.auth.entity.User;
 import com.onclick.domain.auth.repository.UserRepository;
 import com.onclick.domain.store.entity.Store;
-import com.onclick.domain.store.entity.StoreRole;
-import com.onclick.domain.store.entity.UserStoreMembership;
 import com.onclick.domain.store.repository.StoreRepository;
-import com.onclick.domain.store.repository.UserStoreMembershipRepository;
 import com.onclick.domain.store.service.StoreInputValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
@@ -27,7 +24,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final StoreRepository storeRepository;
-    private final UserStoreMembershipRepository membershipRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final StoreInputValidator storeInputValidator;
@@ -35,14 +31,12 @@ public class AuthService {
     public AuthService(
             UserRepository userRepository,
             StoreRepository storeRepository,
-            UserStoreMembershipRepository membershipRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
             StoreInputValidator storeInputValidator
     ) {
         this.userRepository = userRepository;
         this.storeRepository = storeRepository;
-        this.membershipRepository = membershipRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.storeInputValidator = storeInputValidator;
@@ -64,8 +58,7 @@ public class AuthService {
 
         String storeName = storeInputValidator.requireName(request.storeName());
         String timeZone = storeInputValidator.normalizeTimeZone(request.timeZone());
-        Store store = storeRepository.save(new Store(storeName, timeZone));
-        membershipRepository.save(new UserStoreMembership(user, store, StoreRole.OWNER));
+        Store store = storeRepository.save(new Store(user, storeName, timeZone));
 
         return new SignUpResponse(
                 user.getId(),

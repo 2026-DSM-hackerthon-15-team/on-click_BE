@@ -9,8 +9,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.onclick.domain.store.entity.StoreRole;
-import com.onclick.domain.store.repository.UserStoreMembershipRepository;
+import com.onclick.domain.store.repository.StoreRepository;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,18 +21,15 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
 class AuthProductApiIntegrationTest {
 
     @Autowired
@@ -52,16 +48,31 @@ class AuthProductApiIntegrationTest {
     private Clock clock;
 
     @Autowired
-    private UserStoreMembershipRepository membershipRepository;
+    private StoreRepository storeRepository;
 
     @Test
     void applicationContextStartsAfterFlywayMigrationAndJpaSchemaValidation() {
         Integer successfulMigrations = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = TRUE",
+                "SELECT COUNT(*) FROM flyway_schema_history "
+                        + "WHERE version IN ('1', '2', '3') AND success = TRUE",
                 Integer.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(1);
+        assertThat(successfulMigrations).isEqualTo(3);
+
+        Integer membershipTableCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE LOWER(table_name) = 'user_store_memberships'",
+                Integer.class
+        );
+        assertThat(membershipTableCount).isZero();
+
+        Integer removedVisitorTableCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE LOWER(table_name) = 'hourly_visitor_counts'",
+                Integer.class
+        );
+        assertThat(removedVisitorTableCount).isZero();
     }
 
     @Test
@@ -88,11 +99,11 @@ class AuthProductApiIntegrationTest {
         long userId = signUpBody.required("userId").asLong();
         long storeId = signUpBody.required("storeId").asLong();
 
-        assertThat(membershipRepository.findByUserIdAndStoreId(userId, storeId))
+        assertThat(storeRepository.findByIdAndOwnerId(storeId, userId))
                 .isPresent()
                 .get()
-                .extracting(membership -> membership.getRole())
-                .isEqualTo(StoreRole.OWNER);
+                .extracting(store -> store.getOwner().getId())
+                .isEqualTo(userId);
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -150,7 +161,7 @@ class AuthProductApiIntegrationTest {
     }
 
     @Test
-    void posSaleAndVisitorsDriveDashboardAndCancellationRemovesTheOrder() throws Exception {
+    void posSaleDrivesOrdersAndVisitorsAndCancellationRemovesBoth() throws Exception {
         String accountId = "dashboard-"
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
         String password = "password123!";
@@ -203,14 +214,14 @@ class AuthProductApiIntegrationTest {
                 .atZone(storeZone)
                 .toInstant()
                 .toString();
-        String transactionId = "tx-" + UUID.randomUUID();
+        String clientTransactionId = "tx-" + UUID.randomUUID();
 
-        mockMvc.perform(post("/stores/{storeId}/sales/transactions", storeId)
+        MvcResult saleResult = mockMvc.perform(post("/stores/{storeId}/sales/transactions", storeId)
                         .header("Authorization", authorization)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "transactionId": "%s",
+                                  "clientTransactionId": "%s",
                                   "soldAt": "%s",
                                   "items": [
                                     {
@@ -227,28 +238,16 @@ class AuthProductApiIntegrationTest {
                                     }
                                   ]
                                 }
-                                """.formatted(transactionId, soldAt, productId, productId)))
+                                """.formatted(clientTransactionId, soldAt, productId, productId)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.transactionId").value(transactionId))
+                .andExpect(jsonPath("$.saleId").isNumber())
+                .andExpect(jsonPath("$.clientTransactionId").value(clientTransactionId))
                 .andExpect(jsonPath("$.totalPaidAmount").value(15000))
                 .andExpect(jsonPath("$.totalQuantity").value(3))
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.items.length()").value(2));
-
-        mockMvc.perform(put("/stores/{storeId}/visitors/hourly", storeId)
-                        .header("Authorization", authorization)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "businessDate": "%s",
-                                  "hour": %d,
-                                  "visitorCount": 17
-                                }
-                                """.formatted(businessDate, businessHour)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.businessDate").value(businessDate.toString()))
-                .andExpect(jsonPath("$.hour").value(businessHour))
-                .andExpect(jsonPath("$.visitorCount").value(17));
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andReturn();
+        long saleId = readBody(saleResult).required("saleId").asLong();
 
         mockMvc.perform(get("/stores/{storeId}/dashboard/summary", storeId)
                         .header("Authorization", authorization))
@@ -256,7 +255,7 @@ class AuthProductApiIntegrationTest {
                 .andExpect(jsonPath("$.businessDate").value(businessDate.toString()))
                 .andExpect(jsonPath("$.totalSalesAmount").value(15000))
                 .andExpect(jsonPath("$.orderCount").value(1))
-                .andExpect(jsonPath("$.totalVisitors").value(17));
+                .andExpect(jsonPath("$.totalVisitors").value(1));
 
         mockMvc.perform(get("/stores/{storeId}/dashboard/hourly-sales", storeId)
                         .header("Authorization", authorization))
@@ -273,10 +272,10 @@ class AuthProductApiIntegrationTest {
         mockMvc.perform(get("/stores/{storeId}/dashboard/hourly-visitors", storeId)
                         .header("Authorization", authorization))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalVisitors").value(17))
+                .andExpect(jsonPath("$.totalVisitors").value(1))
                 .andExpect(jsonPath("$.hourly.length()").value(24))
                 .andExpect(jsonPath("$.hourly[%d].hour".formatted(businessHour)).value(businessHour))
-                .andExpect(jsonPath("$.hourly[%d].visitorCount".formatted(businessHour)).value(17));
+                .andExpect(jsonPath("$.hourly[%d].visitorCount".formatted(businessHour)).value(1));
 
         mockMvc.perform(get("/stores/{storeId}/dashboard/closing-sales-forecast", storeId)
                         .header("Authorization", authorization))
@@ -296,9 +295,9 @@ class AuthProductApiIntegrationTest {
                 .andExpect(jsonPath("$.mock").doesNotExist());
 
         mockMvc.perform(post(
-                        "/stores/{storeId}/sales/transactions/{transactionId}/cancel",
+                        "/stores/{storeId}/sales/transactions/{saleId}/cancel",
                         storeId,
-                        transactionId
+                        saleId
                 )
                         .header("Authorization", authorization))
                 .andExpect(status().isOk())
@@ -309,7 +308,7 @@ class AuthProductApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSalesAmount").value(0))
                 .andExpect(jsonPath("$.orderCount").value(0))
-                .andExpect(jsonPath("$.totalVisitors").value(17));
+                .andExpect(jsonPath("$.totalVisitors").value(0));
     }
 
     private JsonNode readBody(MvcResult result) throws Exception {
