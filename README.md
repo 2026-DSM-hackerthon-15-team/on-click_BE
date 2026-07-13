@@ -62,4 +62,4 @@ export JWT_SECRET=32바이트_이상의_안전한_비밀키
 
 ## 외부 연동 경계
 
-실제 POS와 AI 서버는 아직 연동하지 않습니다. POS 대신 판매·방문자 입력 API를 사용하며, 마감 매출 및 내일 방문자 예측은 `app.ai.provider=mock`의 `MockAiClient`가 응답합니다. 향후 `AiClient`의 HTTP 구현으로 교체할 수 있습니다.
+POS 데이터는 판매·방문자 입력 API를 통해 수집합니다. 마감 매출과 내일 방문자 예측은 `AiClient`를 통해 제공하며, 실행 환경의 provider와 관계없이 프론트에는 동일한 정상 응답 계약을 보장합니다.

@@ -5,8 +5,7 @@ import java.util.Objects;
 
 public record TomorrowVisitorsForecastResult(
         long expectedVisitors,
-        Instant generatedAt,
-        boolean mock
+        Instant generatedAt
 ) {
 
     public TomorrowVisitorsForecastResult {

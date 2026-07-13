@@ -26,12 +26,12 @@ public class MockAiClient implements AiClient {
     @Override
     public ClosingSalesForecastResult forecastClosingSales(ClosingSalesForecastRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        return new ClosingSalesForecastResult(MOCK_CLOSING_SALES, clock.instant(), true);
+        return new ClosingSalesForecastResult(MOCK_CLOSING_SALES, clock.instant());
     }
 
     @Override
     public TomorrowVisitorsForecastResult forecastTomorrowVisitors(TomorrowVisitorsForecastRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        return new TomorrowVisitorsForecastResult(MOCK_TOMORROW_VISITORS, clock.instant(), true);
+        return new TomorrowVisitorsForecastResult(MOCK_TOMORROW_VISITORS, clock.instant());
     }
 }

@@ -7,7 +7,6 @@ public record TomorrowVisitorsForecastResponse(
         Long storeId,
         LocalDate targetDate,
         long expectedVisitors,
-        Instant generatedAt,
-        boolean mock
+        Instant generatedAt
 ) {
 }

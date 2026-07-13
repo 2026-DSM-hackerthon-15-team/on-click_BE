@@ -278,6 +278,23 @@ class AuthProductApiIntegrationTest {
                 .andExpect(jsonPath("$.hourly[%d].hour".formatted(businessHour)).value(businessHour))
                 .andExpect(jsonPath("$.hourly[%d].visitorCount".formatted(businessHour)).value(17));
 
+        mockMvc.perform(get("/stores/{storeId}/dashboard/closing-sales-forecast", storeId)
+                        .header("Authorization", authorization))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessDate").value(businessDate.toString()))
+                .andExpect(jsonPath("$.observedSalesAmount").value(15000))
+                .andExpect(jsonPath("$.forecastClosingSalesAmount").value(500000))
+                .andExpect(jsonPath("$.generatedAt").exists())
+                .andExpect(jsonPath("$.mock").doesNotExist());
+
+        mockMvc.perform(get("/stores/{storeId}/dashboard/tomorrow-visitors-forecast", storeId)
+                        .header("Authorization", authorization))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.targetDate").value(businessDate.plusDays(1).toString()))
+                .andExpect(jsonPath("$.expectedVisitors").value(120))
+                .andExpect(jsonPath("$.generatedAt").exists())
+                .andExpect(jsonPath("$.mock").doesNotExist());
+
         mockMvc.perform(post(
                         "/stores/{storeId}/sales/transactions/{transactionId}/cancel",
                         storeId,

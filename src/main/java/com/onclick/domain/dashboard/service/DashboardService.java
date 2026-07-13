@@ -157,8 +157,7 @@ public class DashboardService {
                 CURRENCY,
                 observedSales,
                 result.expectedClosingSales(),
-                result.generatedAt(),
-                result.mock()
+                result.generatedAt()
         );
     }
 
@@ -172,8 +171,7 @@ public class DashboardService {
                 storeId,
                 targetDate,
                 result.expectedVisitors(),
-                result.generatedAt(),
-                result.mock()
+                result.generatedAt()
         );
     }
 

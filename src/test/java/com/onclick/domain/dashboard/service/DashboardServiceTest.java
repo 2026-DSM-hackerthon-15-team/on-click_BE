@@ -162,9 +162,9 @@ class DashboardServiceTest {
                 BUSINESS_DATE.plusDays(1)
         );
         given(aiClient.forecastClosingSales(closingRequest))
-                .willReturn(new ClosingSalesForecastResult(25_000, generatedAt, true));
+                .willReturn(new ClosingSalesForecastResult(25_000, generatedAt));
         given(aiClient.forecastTomorrowVisitors(visitorsRequest))
-                .willReturn(new TomorrowVisitorsForecastResult(120, generatedAt, true));
+                .willReturn(new TomorrowVisitorsForecastResult(120, generatedAt));
 
         var closing = dashboardService.getClosingSalesForecast(jwt, STORE_ID);
         var visitors = dashboardService.getTomorrowVisitorsForecast(jwt, STORE_ID);
@@ -172,11 +172,9 @@ class DashboardServiceTest {
         assertThat(closing.observedSalesAmount()).isEqualTo(10_000);
         assertThat(closing.forecastClosingSalesAmount()).isEqualTo(25_000);
         assertThat(closing.generatedAt()).isEqualTo(generatedAt);
-        assertThat(closing.mock()).isTrue();
         assertThat(visitors.targetDate()).isEqualTo(BUSINESS_DATE.plusDays(1));
         assertThat(visitors.expectedVisitors()).isEqualTo(120);
         assertThat(visitors.generatedAt()).isEqualTo(generatedAt);
-        assertThat(visitors.mock()).isTrue();
         verify(aiClient).forecastClosingSales(closingRequest);
         verify(aiClient).forecastTomorrowVisitors(visitorsRequest);
     }

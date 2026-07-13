@@ -27,7 +27,6 @@ class MockAiClientTest {
 
         assertThat(result.expectedClosingSales()).isEqualTo(MockAiClient.MOCK_CLOSING_SALES);
         assertThat(result.generatedAt()).isEqualTo(NOW);
-        assertThat(result.mock()).isTrue();
     }
 
     @Test
@@ -38,6 +37,5 @@ class MockAiClientTest {
 
         assertThat(result.expectedVisitors()).isEqualTo(MockAiClient.MOCK_TOMORROW_VISITORS);
         assertThat(result.generatedAt()).isEqualTo(NOW);
-        assertThat(result.mock()).isTrue();
     }
 }

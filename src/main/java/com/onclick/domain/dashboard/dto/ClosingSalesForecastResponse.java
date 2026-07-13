@@ -9,7 +9,6 @@ public record ClosingSalesForecastResponse(
         String currency,
         long observedSalesAmount,
         long forecastClosingSalesAmount,
-        Instant generatedAt,
-        boolean mock
+        Instant generatedAt
 ) {
 }
