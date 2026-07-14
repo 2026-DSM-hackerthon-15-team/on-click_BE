@@ -39,23 +39,27 @@ app:
     provider: ${AI_PROVIDER:mock}
     http:
       base-url: ${AI_BASE_URL:http://localhost:8000}
-      internal-api-key: ${AI_INTERNAL_API_KEY:}
-      internal-api-key-header: ${AI_INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
       connect-timeout: ${AI_CONNECT_TIMEOUT:PT2S}
-      read-timeout: ${AI_READ_TIMEOUT:PT10S}
+      read-timeout: ${AI_READ_TIMEOUT:PT60S}
       max-attempts: ${AI_MAX_ATTEMPTS:2}
       paths:
         closing-sales: ${AI_CLOSING_SALES_PATH:/ai/forecasts/closing-sales}
         tomorrow-visitors: ${AI_TOMORROW_VISITORS_PATH:/ai/forecasts/tomorrow-visitors}
         daily-consulting: ${AI_DAILY_CONSULTING_PATH:/ai/consultings/daily}
         chat: ${AI_CHAT_PATH:/ai/chat}
-        marketing: ${AI_MARKETING_PATH:/ai/marketing/generations}
+        marketing: ${AI_MARKETING_PATH:/ai/marketings/copy}
   media:
     storage-directory: ${MEDIA_STORAGE_DIRECTORY:/tmp/on-click-media}
     public-base-url: ${MEDIA_PUBLIC_BASE_URL:http://localhost:8080}
     max-file-size-bytes: ${MEDIA_MAX_FILE_SIZE_BYTES:10485760}
     orphan-retention: ${MEDIA_ORPHAN_RETENTION:PT24H}
     cleanup-interval: ${MEDIA_CLEANUP_INTERVAL:PT1H}
+  chat:
+    processing:
+      max-attempts: ${CHAT_MAX_ATTEMPTS:3}
+      lease-duration: ${CHAT_LEASE_DURATION:PT4M}
+      retry-delay: ${CHAT_RETRY_DELAY:PT10S}
+      recovery-batch-size: ${CHAT_RECOVERY_BATCH_SIZE:50}
   consulting:
     enabled: ${CONSULTING_ENABLED:true}
     scheduler-delay: ${CONSULTING_SCHEDULER_DELAY:PT1M}
@@ -63,4 +67,4 @@ app:
     max-attempts: ${CONSULTING_MAX_ATTEMPTS:3}
     batch-size: ${CONSULTING_BATCH_SIZE:100}
     retry-delay: ${CONSULTING_RETRY_DELAY:PT5M}
-    lease-duration: ${CONSULTING_LEASE_DURATION:PT2M}
+    lease-duration: ${CONSULTING_LEASE_DURATION:PT4M}

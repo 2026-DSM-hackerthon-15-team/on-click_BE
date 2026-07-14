@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ChatProcessingProperties {
 
     private int maxAttempts = 3;
-    private Duration leaseDuration = Duration.ofMinutes(2);
+    private Duration leaseDuration = Duration.ofMinutes(4);
     private Duration retryDelay = Duration.ofSeconds(10);
     private int recoveryBatchSize = 50;
 
@@ -21,7 +21,7 @@ public class ChatProcessingProperties {
     }
 
     public Duration safeLeaseDuration() {
-        return positiveOrDefault(leaseDuration, Duration.ofMinutes(2));
+        return positiveOrDefault(leaseDuration, Duration.ofMinutes(4));
     }
 
     public Duration safeRetryDelay() {

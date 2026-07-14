@@ -25,6 +25,7 @@ class MarketingContentTest {
         LocalDateTime now = LocalDateTime.of(2026, 7, 14, 21, 0);
 
         marketing.approve(now);
+        assertThat(marketing.getNextPublishAt()).isNull();
         marketing.beginPublishing(now);
         marketing.markPublished("post-1", "https://instagram.example/post-1", now.plusSeconds(2));
 

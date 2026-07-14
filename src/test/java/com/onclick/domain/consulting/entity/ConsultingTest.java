@@ -72,4 +72,35 @@ class ConsultingTest {
         assertThat(currentCompletion).isTrue();
         assertThat(consulting.getTitle()).isEqualTo("최신 결과");
     }
+
+    @Test
+    void expiredLastAttemptIsTerminalizedAfterWorkerCrash() {
+        Consulting consulting = Consulting.pending(3L, LocalDate.of(2026, 7, 13), NOW);
+        Duration lease = Duration.ofMinutes(1);
+
+        consulting.claim(NOW, lease, 3);
+        consulting.claim(NOW.plusMinutes(1), lease, 3);
+        consulting.claim(NOW.plusMinutes(2), lease, 3);
+
+        boolean reclaimed = consulting.claim(NOW.plusMinutes(3), lease, 3);
+
+        assertThat(reclaimed).isFalse();
+        assertThat(consulting.getAttemptCount()).isEqualTo(3);
+        assertThat(consulting.getStatus()).isEqualTo(ConsultingStatus.FAILED);
+        assertThat(consulting.getNextRetryAt()).isNull();
+        assertThat(consulting.getLastError()).contains("제한 횟수");
+    }
+
+    @Test
+    void failedJobIsNeverReactivatedWhenConfiguredAttemptLimitIncreases() {
+        Consulting consulting = Consulting.pending(3L, LocalDate.of(2026, 7, 13), NOW);
+        consulting.claim(NOW, Duration.ofMinutes(1), 1);
+        consulting.fail("permanent", NOW, NOW.plusMinutes(1), 1, 1);
+
+        boolean claimed = consulting.claim(NOW.plusMinutes(1), Duration.ofMinutes(1), 5);
+
+        assertThat(claimed).isFalse();
+        assertThat(consulting.getStatus()).isEqualTo(ConsultingStatus.FAILED);
+        assertThat(consulting.getAttemptCount()).isEqualTo(1);
+    }
 }

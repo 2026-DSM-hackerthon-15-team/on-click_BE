@@ -69,11 +69,9 @@ public class ConsultingScheduler {
     }
 
     private void processRetryableConsultings(LocalDateTime now) {
-        int maxAttempts = Math.max(1, properties.getMaxAttempts());
         List<Long> retryableIds = jobManager.findRetryableIds(
                 now,
-                maxAttempts,
-                properties.getBatchSize()
+                properties.safeBatchSize()
         );
         for (Long consultingId : retryableIds) {
             jobProcessor.process(consultingId);

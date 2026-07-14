@@ -3,6 +3,8 @@ package com.onclick.domain.chat.service;
 import java.util.Optional;
 
 import com.onclick.domain.chat.generation.ChatGenerationPort;
+import com.onclick.global.error.ApiException;
+import com.onclick.global.error.ErrorCode;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +43,7 @@ class ChatMessageProcessor {
                     work.attempt(),
                     exception
             );
-            workService.fail(work);
+            workService.fail(work, isRetryable(exception));
             return;
         }
 
@@ -51,5 +53,12 @@ class ChatMessageProcessor {
                 work.assistantMessageId(),
                 work.attempt()
         );
+    }
+
+    private boolean isRetryable(RuntimeException exception) {
+        if (exception instanceof ApiException apiException) {
+            return apiException.errorCode() == ErrorCode.AI_SERVICE_UNAVAILABLE;
+        }
+        return true;
     }
 }

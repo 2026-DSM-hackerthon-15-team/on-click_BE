@@ -70,4 +70,17 @@ public interface SaleTransactionRepository extends JpaRepository<SaleTransaction
             LocalDateTime from,
             LocalDateTime to
     );
+
+    @EntityGraph(attributePaths = {"items"})
+    List<SaleTransaction> findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanEqualOrderBySoldAtAsc(
+            Long storeId,
+            LocalDateTime from,
+            LocalDateTime to
+    );
+
+    @EntityGraph(attributePaths = {"items"})
+    List<SaleTransaction> findAllByStoreIdAndSoldAtLessThanOrderBySoldAtAsc(
+            Long storeId,
+            LocalDateTime to
+    );
 }

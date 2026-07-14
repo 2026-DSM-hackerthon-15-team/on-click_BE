@@ -38,16 +38,24 @@ public class MarketingService {
     public MarketingResponse generate(Jwt jwt, Long storeId, MarketingGenerateRequest request) {
         Store store = storeAccessValidator.validate(jwt, storeId);
         List<MediaFile> mediaFiles = mediaStorageService.requireOwned(storeId, request.mediaIds());
+        List<String> hashtags = defaultHashtags(store, request.productName());
+        String draftText = buildDraftText(request);
+        List<String> imageUrls = mediaFiles.stream()
+                .map(mediaStorageService::publicUrl)
+                .toList();
         MarketingGenerationResult generated = aiClient.generateMarketing(new MarketingGenerationRequest(
-                storeId,
-                store.getName(),
-                buildPrompt(request)
+                store.getOwnerUserId(),
+                imageUrls,
+                draftText,
+                hashtags,
+                request.tone(),
+                request.additionalRequest()
         ));
         MarketingContent marketing = repository.save(new MarketingContent(
                 storeId,
                 request.productName().trim() + " Instagram 홍보",
                 generated.content(),
-                defaultHashtags(store, request.productName()),
+                hashtags,
                 mediaFiles
         ));
         return MarketingResponse.from(marketing, mediaStorageService);
@@ -112,22 +120,25 @@ public class MarketingService {
                 .orElseThrow(() -> new ApiException(ErrorCode.MARKETING_NOT_FOUND));
     }
 
-    private String buildPrompt(MarketingGenerateRequest request) {
-        StringBuilder prompt = new StringBuilder()
+    private String buildDraftText(MarketingGenerateRequest request) {
+        StringBuilder draftText = new StringBuilder()
                 .append("상품명: ").append(request.productName().trim())
                 .append("\n설명: ").append(request.description().trim());
-        append(prompt, "가격", request.price());
-        append(prompt, "프로모션", request.promotion());
-        append(prompt, "대상 고객", request.targetAudience());
-        append(prompt, "톤", request.tone());
-        append(prompt, "추가 요청", request.additionalRequest());
-        prompt.append("\nInstagram 게시용 한국어 본문과 적절한 해시태그를 생성해 주세요.");
-        return prompt.toString();
+        append(draftText, "가격", request.price());
+        append(draftText, "프로모션", request.promotion());
+        append(draftText, "대상 고객", request.targetAudience());
+        if (draftText.length() > 2000) {
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "AI 마케팅 초안 입력은 2000자를 초과할 수 없습니다."
+            );
+        }
+        return draftText.toString();
     }
 
     private void append(StringBuilder builder, String label, Object value) {
         if (value != null && !value.toString().isBlank()) {
-            builder.append('\n').append(label).append(": ").append(value);
+            builder.append('\n').append(label).append(": ").append(value.toString().trim());
         }
     }
 

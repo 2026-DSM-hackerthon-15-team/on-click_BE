@@ -150,7 +150,7 @@ public class MarketingContent {
         }
         status = MarketingStatus.APPROVED;
         approvedAt = approvedAt == null ? now : approvedAt;
-        nextPublishAt = now;
+        nextPublishAt = null;
         failureReason = null;
     }
 

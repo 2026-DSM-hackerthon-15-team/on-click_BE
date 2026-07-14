@@ -6,6 +6,8 @@ import java.time.LocalDateTime;
 import com.onclick.common.ai.AiClient;
 import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
+import com.onclick.global.error.ApiException;
+import com.onclick.global.error.ErrorCode;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,12 +25,12 @@ class ConsultingJobProcessor {
     private final Clock clock;
 
     void process(Long consultingId) {
-        int maxAttempts = Math.max(1, properties.getMaxAttempts());
+        int maxAttempts = properties.safeMaxAttempts();
         LocalDateTime now = ConsultingTargetDatePolicy.now(clock);
         jobManager.claim(
                         consultingId,
                         now,
-                        properties.getLeaseDuration(),
+                        properties.safeLeaseDuration(),
                         maxAttempts
                 )
                 .ifPresent(job -> generate(job, maxAttempts));
@@ -52,8 +54,8 @@ class ConsultingJobProcessor {
                         job,
                         exception.getMessage(),
                         ConsultingTargetDatePolicy.now(clock),
-                        properties.getRetryDelay(),
-                        maxAttempts
+                        properties.safeRetryDelay(),
+                        isRetryable(exception) ? maxAttempts : job.attempt()
                 );
             } catch (RuntimeException persistenceFailure) {
                 log.error(
@@ -63,5 +65,12 @@ class ConsultingJobProcessor {
                 );
             }
         }
+    }
+
+    private boolean isRetryable(RuntimeException exception) {
+        if (exception instanceof ApiException apiException) {
+            return apiException.errorCode() == ErrorCode.AI_SERVICE_UNAVAILABLE;
+        }
+        return true;
     }
 }

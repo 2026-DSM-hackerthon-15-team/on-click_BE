@@ -58,7 +58,7 @@ class ConsultingSchedulerTest {
     void createsCurrentBusinessDateAfterClosingAndUsesSharedProcessor() {
         Store store = store();
         given(storeRepository.findAll()).willReturn(List.of(store));
-        given(jobManager.findRetryableIds(NOW, 3, 100)).willReturn(List.of(10L));
+        given(jobManager.findRetryableIds(NOW, 100)).willReturn(List.of(10L));
 
         scheduler.generateDueConsultings();
 

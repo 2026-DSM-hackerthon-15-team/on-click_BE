@@ -3,6 +3,7 @@ package com.onclick.domain.marketing.dto;
 import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -12,8 +13,8 @@ public record MarketingGenerateRequest(
         @PositiveOrZero Long price,
         @Size(max = 500) String promotion,
         @Size(max = 200) String targetAudience,
-        @Size(max = 30) String tone,
-        @Size(max = 1000) String additionalRequest,
-        @Size(max = 10) List<Long> mediaIds
+        @Size(max = 100) String tone,
+        @Size(max = 500) String additionalRequest,
+        @NotEmpty @Size(max = 10) List<Long> mediaIds
 ) {
 }

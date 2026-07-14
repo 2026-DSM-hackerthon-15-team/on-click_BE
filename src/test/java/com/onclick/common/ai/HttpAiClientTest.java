@@ -1,5 +1,7 @@
 package com.onclick.common.ai;
 
+import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -8,11 +10,15 @@ import com.onclick.common.ai.dto.ChatGenerationRequest;
 import com.onclick.common.ai.dto.ClosingSalesForecastRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
+import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -26,8 +32,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class HttpAiClientTest {
@@ -65,6 +71,28 @@ class HttpAiClientTest {
         );
 
         assertThat(result.expectedClosingSales()).isEqualTo(750_000);
+        assertThat(result.generatedAt()).isEqualTo(LocalDateTime.of(2026, 7, 13, 22, 0));
+        server.verify();
+    }
+
+    @Test
+    void postsTomorrowVisitorsForecastUsingIsoTargetDate() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/tomorrow-visitors"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Internal-Api-Key", "internal-secret"))
+                .andExpect(jsonPath("$.storeId").value(7))
+                .andExpect(jsonPath("$.targetDate").value("2026-07-14"))
+                .andRespond(withSuccess(
+                        "{\"expectedVisitors\":120,\"generatedAt\":\"2026-07-13T13:00:00Z\"}",
+                        MediaType.APPLICATION_JSON
+                ));
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+
+        var result = client.forecastTomorrowVisitors(
+                new TomorrowVisitorsForecastRequest(7L, LocalDate.of(2026, 7, 14))
+        );
+
+        assertThat(result.expectedVisitors()).isEqualTo(120);
         assertThat(result.generatedAt()).isEqualTo(LocalDateTime.of(2026, 7, 13, 22, 0));
         server.verify();
     }
@@ -156,7 +184,7 @@ class HttpAiClientTest {
     }
 
     @Test
-    void mapsMismatchedDailyConsultingDateToServiceUnavailable() {
+    void mapsMismatchedDailyConsultingDateToInvalidResponse() {
         server.expect(once(), requestTo("https://ai.example.test/ai/consultings/daily"))
                 .andRespond(withSuccess(
                         """
@@ -177,12 +205,12 @@ class HttpAiClientTest {
                 LocalDate.of(2026, 7, 13),
                 ConsultingGenerationRequest.DAILY_V1
         ))).isInstanceOfSatisfying(ApiException.class, exception ->
-                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_RESPONSE_INVALID));
         server.verify();
     }
 
     @Test
-    void mapsIncompleteSuccessfulChatPayloadToServiceUnavailable() {
+    void mapsIncompleteSuccessfulChatPayloadToInvalidResponse() {
         server.expect(once(), requestTo("https://ai.example.test/ai/chat"))
                 .andRespond(withSuccess(
                         "{\"answer\":\"응답\",\"usedTools\":[]}",
@@ -198,12 +226,12 @@ class HttpAiClientTest {
                 List.of("sales_analysis"),
                 List.of()
         ))).isInstanceOfSatisfying(ApiException.class, exception ->
-                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_RESPONSE_INVALID));
         server.verify();
     }
 
     @Test
-    void mapsInvalidSuccessfulAiPayloadToServiceUnavailable() {
+    void mapsInvalidSuccessfulAiPayloadToInvalidResponse() {
         server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
                 .andRespond(withSuccess(
                         "{\"expectedClosingSales\":-1,\"generatedAt\":\"2026-07-13T13:00:00Z\"}",
@@ -214,20 +242,61 @@ class HttpAiClientTest {
         assertThatThrownBy(() -> client.forecastClosingSales(
                 new ClosingSalesForecastRequest(7L, LocalDate.of(2026, 7, 13))
         )).isInstanceOfSatisfying(ApiException.class, exception ->
-                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_RESPONSE_INVALID));
         server.verify();
     }
 
     @Test
-    void mapsBlankMarketingContentToServiceUnavailable() {
-        server.expect(once(), requestTo("https://ai.example.test/ai/marketing/generations"))
-                .andRespond(withSuccess("{\"content\":\"  \"}", MediaType.APPLICATION_JSON));
+    void postsMarketingCopyUsingDocumentedAiContract() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/marketings/copy"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Internal-Api-Key", "internal-secret"))
+                .andExpect(jsonPath("$.userId").value(7))
+                .andExpect(jsonPath("$.imageUrls[0]").value("https://cdn.example.com/menu.jpg"))
+                .andExpect(jsonPath("$.draftText").value("신메뉴를 소개합니다."))
+                .andExpect(jsonPath("$.tags[0]").value("신메뉴"))
+                .andExpect(jsonPath("$.tone").value("친근하게"))
+                .andExpect(jsonPath("$.additionalRequest").doesNotExist())
+                .andRespond(withSuccess(
+                        "{\"content\":\"완성된 문구\",\"model\":\"claude-sonnet-4-6\"}",
+                        MediaType.APPLICATION_JSON
+                ));
         HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
 
-        assertThatThrownBy(() -> client.generateMarketing(
-                new MarketingGenerationRequest(3L, "강남점", "신메뉴 홍보")
-        )).isInstanceOfSatisfying(ApiException.class, exception ->
-                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
+        var result = client.generateMarketing(marketingRequest());
+
+        assertThat(result.content()).isEqualTo("완성된 문구");
+        assertThat(result.model()).isEqualTo("claude-sonnet-4-6");
+        server.verify();
+    }
+
+    @Test
+    void mapsIncompleteMarketingResponseToInvalidResponse() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/marketings/copy"))
+                .andRespond(withSuccess("{\"content\":\"완성된 문구\"}", MediaType.APPLICATION_JSON));
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+
+        assertThatThrownBy(() -> client.generateMarketing(marketingRequest()))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_RESPONSE_INVALID));
+        server.verify();
+    }
+
+    @Test
+    void rejectsNonHttpsMarketingImageBeforeCallingAi() {
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+        MarketingGenerationRequest request = new MarketingGenerationRequest(
+                7L,
+                List.of("http://localhost:8080/public/media/image"),
+                "신메뉴를 소개합니다.",
+                List.of("신메뉴"),
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> client.generateMarketing(request))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_REQUEST_REJECTED));
         server.verify();
     }
 
@@ -243,11 +312,27 @@ class HttpAiClientTest {
     }
 
     @Test
-    void retriesServerFailureAndMapsFinalFailureToAiServiceUnavailable() {
+    void rejectsInvalidHttpTimeoutAndPathConfiguration() {
+        AiHttpProperties invalidTimeout = productionProperties();
+        invalidTimeout.setReadTimeout(Duration.ZERO);
+        assertThatThrownBy(() -> new HttpAiClient(invalidTimeout))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI_READ_TIMEOUT");
+
+        AiHttpProperties invalidPath = productionProperties();
+        invalidPath.getPaths().setChat("ai/chat");
+        assertThatThrownBy(() -> new HttpAiClient(invalidPath))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI_CHAT_PATH");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {408, 429, 500})
+    void retriesTransientStatusAndMapsFinalFailureToAiServiceUnavailable(int status) {
         server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
-                .andRespond(withServerError());
+                .andRespond(withStatus(HttpStatus.valueOf(status)));
         server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
-                .andRespond(withServerError());
+                .andRespond(withStatus(HttpStatus.valueOf(status)));
         HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
 
         assertThatThrownBy(() -> client.forecastClosingSales(
@@ -258,17 +343,64 @@ class HttpAiClientTest {
         server.verify();
     }
 
-    @Test
-    void doesNotRetryNonTransientClientFailure() {
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 404, 422})
+    void doesNotRetryNonTransientClientFailure(int status) {
         server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
-                .andRespond(withResourceNotFound());
+                .andRespond(withStatus(HttpStatus.valueOf(status)));
         HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
 
         assertThatThrownBy(() -> client.forecastClosingSales(
                 new ClosingSalesForecastRequest(7L, LocalDate.of(2026, 7, 13))
         ))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
-                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_REQUEST_REJECTED));
         server.verify();
+    }
+
+    @Test
+    void retriesTransportTimeoutAndMapsFinalFailureToUnavailable() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
+                .andRespond(withException(new SocketTimeoutException("read timed out")));
+        server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
+                .andRespond(withException(new SocketTimeoutException("read timed out")));
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+
+        assertThatThrownBy(() -> client.forecastClosingSales(
+                new ClosingSalesForecastRequest(7L, LocalDate.of(2026, 7, 13))
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
+        server.verify();
+    }
+
+    @Test
+    void doesNotRetryMalformedSuccessfulJson() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
+                .andRespond(withSuccess("{not-json", MediaType.APPLICATION_JSON));
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+
+        assertThatThrownBy(() -> client.forecastClosingSales(
+                new ClosingSalesForecastRequest(7L, LocalDate.of(2026, 7, 13))
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_RESPONSE_INVALID));
+        server.verify();
+    }
+
+    private MarketingGenerationRequest marketingRequest() {
+        return new MarketingGenerationRequest(
+                7L,
+                List.of("https://cdn.example.com/menu.jpg"),
+                "신메뉴를 소개합니다.",
+                List.of("신메뉴"),
+                "친근하게",
+                null
+        );
+    }
+
+    private AiHttpProperties productionProperties() {
+        AiHttpProperties configured = new AiHttpProperties();
+        configured.setBaseUrl("https://ai.example.test");
+        configured.setInternalApiKey("internal-secret");
+        return configured;
     }
 }

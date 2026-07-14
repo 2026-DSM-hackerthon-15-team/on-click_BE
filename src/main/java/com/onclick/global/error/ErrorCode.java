@@ -35,6 +35,8 @@ public enum ErrorCode {
     INSTAGRAM_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Instagram 계정 정보를 찾을 수 없습니다."),
     AUTOMATION_NOT_FOUND(HttpStatus.NOT_FOUND, "자동화 설정을 찾을 수 없습니다."),
     AI_SERVICE_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "AI 서비스를 일시적으로 사용할 수 없습니다."),
+    AI_REQUEST_REJECTED(HttpStatus.BAD_GATEWAY, "AI 서비스가 요청을 처리하지 못했습니다."),
+    AI_RESPONSE_INVALID(HttpStatus.BAD_GATEWAY, "AI 서비스 응답 형식이 올바르지 않습니다."),
     FUTURE_DATE_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "미래 영업일은 조회할 수 없습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
 

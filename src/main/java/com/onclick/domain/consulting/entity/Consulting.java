@@ -100,10 +100,19 @@ public class Consulting {
     public boolean claim(LocalDateTime now, Duration leaseDuration, int maxAttempts) {
         Objects.requireNonNull(now, "now must not be null");
         Objects.requireNonNull(leaseDuration, "leaseDuration must not be null");
-        if (status == ConsultingStatus.COMPLETED
-                || attemptCount >= maxAttempts
+        if (status != ConsultingStatus.PENDING
                 || (nextRetryAt != null && nextRetryAt.isAfter(now))) {
             return false;
+        }
+        if (attemptCount >= maxAttempts) {
+            status = ConsultingStatus.FAILED;
+            nextRetryAt = null;
+            lastError = truncate("AI 컨설팅 생성 작업이 완료되지 않은 채 제한 횟수에 도달했습니다.");
+            updatedAt = now;
+            return false;
+        }
+        if (leaseDuration.isZero() || leaseDuration.isNegative()) {
+            throw new IllegalArgumentException("leaseDuration must be positive");
         }
         status = ConsultingStatus.PENDING;
         attemptCount++;

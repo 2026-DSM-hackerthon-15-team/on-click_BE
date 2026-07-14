@@ -1,6 +1,7 @@
 package com.onclick.common.ai;
 
 import java.net.http.HttpClient;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.ResourceAccessException;
 
 @Component
 @ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "http")
@@ -125,21 +127,64 @@ public class HttpAiClient implements AiClient {
     @Override
     public MarketingGenerationResult generateMarketing(MarketingGenerationRequest request) {
         String path = properties.getPaths().getMarketing();
+        try {
+            validateMarketingRequest(request);
+        } catch (RuntimeException exception) {
+            throw failure(path, exception, ErrorCode.AI_REQUEST_REJECTED);
+        }
         return mapResponse(path, () -> {
             MarketingGenerationWireResponse response = post(
                     path,
                     request,
                     MarketingGenerationWireResponse.class
             );
-            return new MarketingGenerationResult(response.content());
+            return new MarketingGenerationResult(
+                    requireText(response.content(), "content"),
+                    requireText(response.model(), "model")
+            );
         });
     }
 
     private LocalDateTime toKoreanDateTime(Instant instant) {
         if (instant == null) {
-            throw new ApiException(ErrorCode.AI_SERVICE_UNAVAILABLE);
+            throw new IllegalArgumentException("generatedAt must not be null");
         }
         return KoreanTime.fromInstant(instant);
+    }
+
+    private void validateMarketingRequest(MarketingGenerationRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        if (request.userId() == null) {
+            throw new IllegalArgumentException("userId must not be null");
+        }
+        List<String> imageUrls = requireList(request.imageUrls(), "imageUrls");
+        if (imageUrls.isEmpty() || imageUrls.size() > 10) {
+            throw new IllegalArgumentException("imageUrls must contain between 1 and 10 items");
+        }
+        for (String imageUrl : imageUrls) {
+            if (imageUrl == null || !imageUrl.startsWith("https://")) {
+                throw new IllegalArgumentException("imageUrls must contain HTTPS URLs");
+            }
+        }
+        requireTextWithin(request.draftText(), "draftText", 2_000);
+        if (request.tags() != null && request.tags().size() > 30) {
+            throw new IllegalArgumentException("tags must contain at most 30 items");
+        }
+        requireOptionalTextWithin(request.tone(), "tone", 100);
+        requireOptionalTextWithin(request.additionalRequest(), "additionalRequest", 500);
+    }
+
+    private void requireTextWithin(String value, String field, int maxLength) {
+        String text = requireText(value, field);
+        if (text.length() > maxLength) {
+            throw new IllegalArgumentException(field + " must be at most " + maxLength + " characters");
+        }
+    }
+
+    private void requireOptionalTextWithin(String value, String field, int maxLength) {
+        if (value != null && !value.isBlank() && value.length() > maxLength) {
+            throw new IllegalArgumentException(field + " must be at most " + maxLength + " characters");
+        }
     }
 
     private long requireNonNegative(Long value, String field) {
@@ -263,14 +308,14 @@ public class HttpAiClient implements AiClient {
         } catch (ApiException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw unavailable(path, exception);
+            throw failure(path, exception, ErrorCode.AI_RESPONSE_INVALID);
         }
     }
 
     private <T> T post(String path, Object request, Class<T> responseType) {
         Objects.requireNonNull(request, "request must not be null");
         int maxAttempts = Math.max(1, properties.getMaxAttempts());
-        RestClientException lastFailure = null;
+        RuntimeException lastFailure = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 log.info(
@@ -285,7 +330,11 @@ public class HttpAiClient implements AiClient {
                         .retrieve()
                         .body(responseType);
                 if (response == null) {
-                    throw new ApiException(ErrorCode.AI_SERVICE_UNAVAILABLE);
+                    throw failure(
+                            path,
+                            new IllegalStateException("AI response body must not be null"),
+                            ErrorCode.AI_RESPONSE_INVALID
+                    );
                 }
                 log.info(
                         "AI request succeeded: path={}, attempt={}/{}",
@@ -297,41 +346,47 @@ public class HttpAiClient implements AiClient {
             } catch (RestClientResponseException exception) {
                 lastFailure = exception;
                 if (!isRetryable(exception.getStatusCode()) || attempt == maxAttempts) {
-                    throw unavailable(path, exception);
+                    ErrorCode errorCode = isRetryable(exception.getStatusCode())
+                            ? ErrorCode.AI_SERVICE_UNAVAILABLE
+                            : ErrorCode.AI_REQUEST_REJECTED;
+                    throw failure(path, exception, errorCode);
                 }
-            } catch (RestClientException exception) {
+            } catch (ResourceAccessException exception) {
                 lastFailure = exception;
                 if (attempt == maxAttempts) {
-                    throw unavailable(path, exception);
+                    throw failure(path, exception, ErrorCode.AI_SERVICE_UNAVAILABLE);
                 }
+            } catch (RestClientException exception) {
+                throw failure(path, exception, ErrorCode.AI_RESPONSE_INVALID);
             } catch (RuntimeException exception) {
                 if (exception instanceof ApiException apiException) {
                     throw apiException;
                 }
-                throw unavailable(path, exception);
+                throw failure(path, exception, ErrorCode.AI_RESPONSE_INVALID);
             }
         }
-        throw unavailable(path, lastFailure);
+        throw failure(path, lastFailure, ErrorCode.AI_SERVICE_UNAVAILABLE);
     }
 
     private boolean isRetryable(HttpStatusCode status) {
-        return status.value() == 429 || status.is5xxServerError();
+        return status.value() == 408 || status.value() == 429 || status.is5xxServerError();
     }
 
-    private ApiException unavailable(String path, Throwable cause) {
+    private ApiException failure(String path, Throwable cause, ErrorCode errorCode) {
         String upstreamStatus = cause instanceof RestClientResponseException responseException
                 ? Integer.toString(responseException.getStatusCode().value())
                 : "none";
         String causeType = cause == null ? "unknown" : cause.getClass().getSimpleName();
         log.warn(
-                "AI request failed: path={}, upstreamStatus={}, cause={}",
+                "AI request failed: path={}, upstreamStatus={}, cause={}, errorCode={}",
                 path,
                 upstreamStatus,
-                causeType
+                causeType,
+                errorCode
         );
         return new ApiException(
-                ErrorCode.AI_SERVICE_UNAVAILABLE,
-                ErrorCode.AI_SERVICE_UNAVAILABLE.defaultMessage(),
+                errorCode,
+                errorCode.defaultMessage(),
                 cause
         );
     }
@@ -339,21 +394,27 @@ public class HttpAiClient implements AiClient {
     private static RestClient createRestClient(AiHttpProperties properties) {
         Objects.requireNonNull(properties, "properties must not be null");
         String baseUrl = requireSetting(properties.getBaseUrl(), "AI_BASE_URL");
-        String internalApiKey = requireSetting(properties.getInternalApiKey(), "AI_INTERNAL_API_KEY");
-        String internalApiKeyHeader = requireSetting(
-                properties.getInternalApiKeyHeader(),
-                "AI_INTERNAL_API_KEY_HEADER"
+        Duration connectTimeout = requirePositiveDuration(
+                properties.getConnectTimeout(),
+                "AI_CONNECT_TIMEOUT"
         );
+        Duration readTimeout = requirePositiveDuration(
+                properties.getReadTimeout(),
+                "AI_READ_TIMEOUT"
+        );
+        if (properties.getMaxAttempts() < 1) {
+            throw new IllegalStateException("AI_MAX_ATTEMPTS must be at least 1");
+        }
+        validatePaths(properties.getPaths());
         HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(properties.getConnectTimeout())
+                .connectTimeout(connectTimeout)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(properties.getReadTimeout());
+        requestFactory.setReadTimeout(readTimeout);
 
         RestClient.Builder builder = RestClient.builder()
                 .baseUrl(baseUrl)
-                .requestFactory(requestFactory)
-                .defaultHeader(internalApiKeyHeader, internalApiKey);
+                .requestFactory(requestFactory);
         return builder.build();
     }
 
@@ -364,6 +425,30 @@ public class HttpAiClient implements AiClient {
             );
         }
         return value.trim();
+    }
+
+    private static Duration requirePositiveDuration(Duration value, String settingName) {
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalStateException(settingName + " must be a positive duration");
+        }
+        return value;
+    }
+
+    private static void validatePaths(AiHttpProperties.Paths paths) {
+        Objects.requireNonNull(paths, "AI paths must not be null");
+        requirePath(paths.getClosingSales(), "AI_CLOSING_SALES_PATH");
+        requirePath(paths.getTomorrowVisitors(), "AI_TOMORROW_VISITORS_PATH");
+        requirePath(paths.getDailyConsulting(), "AI_DAILY_CONSULTING_PATH");
+        requirePath(paths.getChat(), "AI_CHAT_PATH");
+        requirePath(paths.getMarketing(), "AI_MARKETING_PATH");
+    }
+
+    private static String requirePath(String value, String settingName) {
+        String path = requireSetting(value, settingName);
+        if (!path.startsWith("/")) {
+            throw new IllegalStateException(settingName + " must start with '/'");
+        }
+        return path;
     }
 
     private record ClosingSalesForecastWireResponse(Long expectedClosingSales, Instant generatedAt) {
@@ -399,7 +484,8 @@ public class HttpAiClient implements AiClient {
     }
 
     private record MarketingGenerationWireResponse(
-            @JsonAlias({"caption", "answer"}) String content
+            @JsonAlias({"caption", "answer"}) String content,
+            String model
     ) {
     }
 

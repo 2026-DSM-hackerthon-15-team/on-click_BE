@@ -35,12 +35,20 @@ class ChatMessageWorkService {
     @Transactional
     public Optional<ChatGenerationWork> claim(Long assistantMessageId) {
         LocalDateTime now = now();
+        int maxAttempts = properties.safeMaxAttempts();
         int claimed = chatMessageRepository.claimPending(
                 assistantMessageId,
                 now,
-                now.plus(properties.safeLeaseDuration())
+                now.plus(properties.safeLeaseDuration()),
+                maxAttempts
         );
         if (claimed == 0) {
+            chatMessageRepository.failExpiredExhausted(
+                    assistantMessageId,
+                    now,
+                    maxAttempts,
+                    FAILED_MESSAGE
+            );
             return Optional.empty();
         }
 
@@ -80,8 +88,13 @@ class ChatMessageWorkService {
 
     @Transactional
     public void fail(ChatGenerationWork work) {
+        fail(work, true);
+    }
+
+    @Transactional
+    public void fail(ChatGenerationWork work, boolean retryable) {
         LocalDateTime now = now();
-        boolean exhausted = work.attempt() >= properties.safeMaxAttempts();
+        boolean exhausted = !retryable || work.attempt() >= properties.safeMaxAttempts();
         ChatMessageStatus status = exhausted
                 ? ChatMessageStatus.FAILED
                 : ChatMessageStatus.PENDING;

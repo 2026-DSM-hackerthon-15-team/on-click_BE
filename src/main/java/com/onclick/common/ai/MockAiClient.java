@@ -29,6 +29,7 @@ public class MockAiClient implements AiClient {
     public static final long MOCK_TOMORROW_VISITORS = 120L;
     public static final String MOCK_CHAT_PREFIX = "AI 답변: ";
     public static final String MOCK_MARKETING_PREFIX = "오늘의 ON:CLICK 추천: ";
+    public static final String MOCK_MARKETING_MODEL = "mock-marketing-v1";
 
     private final Clock clock;
 
@@ -63,7 +64,8 @@ public class MockAiClient implements AiClient {
     public MarketingGenerationResult generateMarketing(MarketingGenerationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         return new MarketingGenerationResult(
-                MOCK_MARKETING_PREFIX + request.storeName() + " - " + request.prompt()
+                MOCK_MARKETING_PREFIX + request.draftText(),
+                MOCK_MARKETING_MODEL
         );
     }
 

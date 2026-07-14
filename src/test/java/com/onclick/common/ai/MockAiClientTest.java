@@ -62,16 +62,20 @@ class MockAiClientTest {
                 List.of()
         ));
         var marketing = mockAiClient.generateMarketing(new MarketingGenerationRequest(
-                1L,
-                "강남점",
-                "신메뉴 홍보"
+                9L,
+                List.of("https://cdn.example.com/menu.jpg"),
+                "신메뉴 홍보",
+                List.of("#신메뉴"),
+                "친근하게",
+                null
         ));
 
         assertThat(consulting.title()).isEqualTo("2026-07-13 일일 영업 컨설팅");
         assertThat(consulting.content()).contains("1번 매장", "2026-07-13 영업 데이터");
         assertThat(chat.content()).isEqualTo(MockAiClient.MOCK_CHAT_PREFIX + "오늘 매출을 알려줘");
         assertThat(marketing.content()).isEqualTo(
-                MockAiClient.MOCK_MARKETING_PREFIX + "강남점 - 신메뉴 홍보"
+                MockAiClient.MOCK_MARKETING_PREFIX + "신메뉴 홍보"
         );
+        assertThat(marketing.model()).isEqualTo(MockAiClient.MOCK_MARKETING_MODEL);
     }
 }

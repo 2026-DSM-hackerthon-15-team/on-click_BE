@@ -56,12 +56,34 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
              WHERE message.id = :messageId
                AND message.role = com.onclick.domain.chat.entity.ChatMessageRole.ASSISTANT
                AND message.status = com.onclick.domain.chat.entity.ChatMessageStatus.PENDING
+               AND message.retryCount < :maxAttempts
                AND (message.nextRetryAt IS NULL OR message.nextRetryAt <= :now)
             """)
     int claimPending(
             @Param("messageId") Long messageId,
             @Param("now") LocalDateTime now,
-            @Param("leaseUntil") LocalDateTime leaseUntil
+            @Param("leaseUntil") LocalDateTime leaseUntil,
+            @Param("maxAttempts") int maxAttempts
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ChatMessage message
+               SET message.status = com.onclick.domain.chat.entity.ChatMessageStatus.FAILED,
+                   message.content = :failedContent,
+                   message.nextRetryAt = NULL,
+                   message.updatedAt = :now
+             WHERE message.id = :messageId
+               AND message.role = com.onclick.domain.chat.entity.ChatMessageRole.ASSISTANT
+               AND message.status = com.onclick.domain.chat.entity.ChatMessageStatus.PENDING
+               AND message.retryCount >= :maxAttempts
+               AND (message.nextRetryAt IS NULL OR message.nextRetryAt <= :now)
+            """)
+    int failExpiredExhausted(
+            @Param("messageId") Long messageId,
+            @Param("now") LocalDateTime now,
+            @Param("maxAttempts") int maxAttempts,
+            @Param("failedContent") String failedContent
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)

@@ -29,15 +29,13 @@ public interface ConsultingRepository extends JpaRepository<Consulting, Long> {
 
     @Query("""
             SELECT consulting.id
-              FROM Consulting consulting
-             WHERE consulting.status <> com.onclick.domain.consulting.entity.ConsultingStatus.COMPLETED
-               AND consulting.attemptCount < :maxAttempts
+             FROM Consulting consulting
+             WHERE consulting.status = com.onclick.domain.consulting.entity.ConsultingStatus.PENDING
                AND (consulting.nextRetryAt IS NULL OR consulting.nextRetryAt <= :now)
              ORDER BY consulting.targetDate ASC, consulting.id ASC
             """)
     List<Long> findRetryableIds(
             @Param("now") LocalDateTime now,
-            @Param("maxAttempts") int maxAttempts,
             Pageable pageable
     );
 }

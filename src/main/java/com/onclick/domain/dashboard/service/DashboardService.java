@@ -9,6 +9,7 @@ import java.util.List;
 import com.onclick.common.ai.AiClient;
 import com.onclick.common.ai.dto.ClosingSalesForecastRequest;
 import com.onclick.common.ai.dto.ClosingSalesForecastResult;
+import com.onclick.common.ai.dto.SaleTransactionInput;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
 import com.onclick.common.time.KoreanTime;
@@ -118,10 +119,19 @@ public class DashboardService {
 
     public ClosingSalesForecastResponse getClosingSalesForecast(Jwt jwt, Long storeId) {
         storeAccessValidator.validate(jwt, storeId);
-        LocalDate businessDate = today();
-        long observedSales = totalSales(completedTransactions(storeId, businessDate));
+        LocalDateTime asOf = now();
+        LocalDate businessDate = asOf.toLocalDate();
+        List<SaleTransaction> transactions = saleTransactionRepository
+                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanEqualOrderBySoldAtAsc(
+                        storeId,
+                        businessDate.atStartOfDay(),
+                        asOf
+                );
+        long observedSales = totalSales(transactions.stream()
+                .filter(transaction -> transaction.getStatus() == SaleStatus.COMPLETED)
+                .toList());
         ClosingSalesForecastResult result = aiClient.forecastClosingSales(
-                new ClosingSalesForecastRequest(storeId, businessDate)
+                new ClosingSalesForecastRequest(storeId, asOf, toAiSalesData(transactions))
         );
         return new ClosingSalesForecastResponse(
                 storeId,
@@ -135,9 +145,15 @@ public class DashboardService {
 
     public TomorrowVisitorsForecastResponse getTomorrowVisitorsForecast(Jwt jwt, Long storeId) {
         storeAccessValidator.validate(jwt, storeId);
-        LocalDate targetDate = today().plusDays(1);
+        LocalDate baseDate = today();
+        LocalDate targetDate = baseDate.plusDays(1);
+        List<SaleTransaction> transactions = saleTransactionRepository
+                .findAllByStoreIdAndSoldAtLessThanOrderBySoldAtAsc(
+                        storeId,
+                        targetDate.atStartOfDay()
+                );
         TomorrowVisitorsForecastResult result = aiClient.forecastTomorrowVisitors(
-                new TomorrowVisitorsForecastRequest(storeId, targetDate)
+                new TomorrowVisitorsForecastRequest(storeId, baseDate, toAiSalesData(transactions))
         );
         return new TomorrowVisitorsForecastResponse(
                 storeId,
@@ -148,7 +164,11 @@ public class DashboardService {
     }
 
     private LocalDate today() {
-        return LocalDate.now(clock.withZone(KoreanTime.ZONE));
+        return now().toLocalDate();
+    }
+
+    private LocalDateTime now() {
+        return KoreanTime.now(clock);
     }
 
     private List<SaleTransaction> completedTransactions(Long storeId, LocalDate date) {
@@ -169,6 +189,16 @@ public class DashboardService {
             total = Math.addExact(total, transaction.totalPaidAmount());
         }
         return total;
+    }
+
+    private List<SaleTransactionInput> toAiSalesData(List<SaleTransaction> transactions) {
+        return transactions.stream()
+                .map(transaction -> new SaleTransactionInput(
+                        transaction.getSoldAt(),
+                        transaction.totalPaidAmount(),
+                        SaleTransactionInput.Status.valueOf(transaction.getStatus().name())
+                ))
+                .toList();
     }
 
     private long sum(long[] values) {

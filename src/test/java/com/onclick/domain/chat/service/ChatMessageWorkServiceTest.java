@@ -67,7 +67,8 @@ class ChatMessageWorkServiceTest {
         given(chatMessageRepository.claimPending(
                 101L,
                 NOW_KST,
-                NOW_KST.plus(Duration.ofMinutes(2))
+                NOW_KST.plus(Duration.ofMinutes(2)),
+                3
         )).willReturn(1);
         given(chatMessageRepository.findWithChatRoomById(101L)).willReturn(Optional.of(assistant));
         given(chatMessageRepository.findByIdAndChatRoom_Id(100L, 10L)).willReturn(Optional.of(user));
@@ -114,6 +115,42 @@ class ChatMessageWorkServiceTest {
                 org.mockito.ArgumentMatchers.eq(NOW_KST)
         );
         assertThat(contentCaptor.getValue()).contains("답변을 생성하지 못했습니다");
+    }
+
+    @Test
+    void marksNonRetryableFailureImmediately() {
+        ChatGenerationWork work = new ChatGenerationWork(101L, 1, null);
+
+        workService.fail(work, false);
+
+        verify(chatMessageRepository).recordFailure(
+                101L,
+                1,
+                ChatMessageStatus.FAILED,
+                ChatMessageWorkService.FAILED_MESSAGE,
+                null,
+                NOW_KST
+        );
+    }
+
+    @Test
+    void expiresLastCrashedAttemptWithoutClaimingAgain() {
+        given(chatMessageRepository.claimPending(
+                101L,
+                NOW_KST,
+                NOW_KST.plus(Duration.ofMinutes(2)),
+                3
+        )).willReturn(0);
+
+        Optional<ChatGenerationWork> work = workService.claim(101L);
+
+        assertThat(work).isEmpty();
+        verify(chatMessageRepository).failExpiredExhausted(
+                101L,
+                NOW_KST,
+                3,
+                ChatMessageWorkService.FAILED_MESSAGE
+        );
     }
 
     private ChatRoom room(Long storeId, Long roomId) {

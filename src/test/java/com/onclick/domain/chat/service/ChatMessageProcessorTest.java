@@ -8,6 +8,8 @@ import java.util.Optional;
 
 import com.onclick.domain.chat.generation.ChatGenerationPort;
 import com.onclick.domain.chat.generation.ChatGenerationRequest;
+import com.onclick.global.error.ApiException;
+import com.onclick.global.error.ErrorCode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +69,23 @@ class ChatMessageProcessorTest {
 
         processor.process(101L);
 
-        verify(workService).fail(work);
+        verify(workService).fail(work, true);
+        verify(workService, never()).complete(
+                org.mockito.ArgumentMatchers.eq(work),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
+    void marksInvalidAiResponseAsTerminalWithoutRetry() {
+        ChatGenerationWork work = work("오늘 매출을 알려줘");
+        given(workService.claim(101L)).willReturn(Optional.of(work));
+        given(generationPort.generate(work.request()))
+                .willThrow(new ApiException(ErrorCode.AI_RESPONSE_INVALID));
+
+        processor.process(101L);
+
+        verify(workService).fail(work, false);
         verify(workService, never()).complete(
                 org.mockito.ArgumentMatchers.eq(work),
                 org.mockito.ArgumentMatchers.anyString()

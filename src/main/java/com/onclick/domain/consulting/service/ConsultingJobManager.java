@@ -42,10 +42,9 @@ public class ConsultingJobManager {
     }
 
     @Transactional(readOnly = true)
-    public List<Long> findRetryableIds(LocalDateTime now, int maxAttempts, int batchSize) {
+    public List<Long> findRetryableIds(LocalDateTime now, int batchSize) {
         return consultingRepository.findRetryableIds(
                 now,
-                maxAttempts,
                 PageRequest.of(0, Math.max(1, batchSize))
         );
     }

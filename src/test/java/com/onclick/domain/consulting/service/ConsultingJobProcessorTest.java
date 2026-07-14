@@ -96,6 +96,27 @@ class ConsultingJobProcessorTest {
     }
 
     @Test
+    void marksRejectedAiRequestTerminalOnFirstAttempt() {
+        ConsultingJobClaim claim = claim();
+        ConsultingGenerationRequest request = request(claim);
+        given(jobManager.claim(10L, NOW, Duration.ofMinutes(2), 3))
+                .willReturn(Optional.of(claim));
+        given(requestFactory.create(claim)).willReturn(request);
+        given(aiClient.generateDailyConsulting(request))
+                .willThrow(new ApiException(ErrorCode.AI_REQUEST_REJECTED));
+
+        processor.process(10L);
+
+        verify(jobManager).fail(
+                eq(claim),
+                eq(ErrorCode.AI_REQUEST_REJECTED.defaultMessage()),
+                eq(NOW),
+                eq(Duration.ofMinutes(5)),
+                eq(claim.attempt())
+        );
+    }
+
+    @Test
     void skipsGenerationWhenAnotherDispatcherOrSchedulerAlreadyClaimedJob() {
         given(jobManager.claim(10L, NOW, Duration.ofMinutes(2), 3))
                 .willReturn(Optional.empty());

@@ -14,10 +14,8 @@ import org.springframework.stereotype.Component;
 public class AiHttpProperties {
 
     private String baseUrl = "http://localhost:8000";
-    private String internalApiKey = "";
-    private String internalApiKeyHeader = "X-Internal-Api-Key";
     private Duration connectTimeout = Duration.ofSeconds(2);
-    private Duration readTimeout = Duration.ofSeconds(10);
+    private Duration readTimeout = Duration.ofSeconds(60);
     private int maxAttempts = 2;
     private final Paths paths = new Paths();
 
@@ -29,7 +27,7 @@ public class AiHttpProperties {
         private String tomorrowVisitors = "/ai/forecasts/tomorrow-visitors";
         private String dailyConsulting = "/ai/consultings/daily";
         private String chat = "/ai/chat";
-        private String marketing = "/ai/marketing/generations";
+        private String marketing = "/ai/marketings/copy";
 
     }
 }

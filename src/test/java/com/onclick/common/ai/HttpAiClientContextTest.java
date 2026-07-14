@@ -14,8 +14,7 @@ class HttpAiClientContextTest {
             .withUserConfiguration(AiHttpProperties.class, HttpAiClient.class)
             .withPropertyValues(
                     "app.ai.provider=http",
-                    "app.ai.http.base-url=http://localhost:8000",
-                    "app.ai.http.internal-api-key=test-internal-key"
+                    "app.ai.http.base-url=http://localhost:8000"
             );
 
     @Test

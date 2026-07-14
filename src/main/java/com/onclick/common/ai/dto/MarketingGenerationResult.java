@@ -1,13 +1,19 @@
 package com.onclick.common.ai.dto;
 
 public record MarketingGenerationResult(
-        String content
+        String content,
+        String model
 ) {
 
     public MarketingGenerationResult {
-        if (content == null || content.isBlank()) {
-            throw new IllegalArgumentException("content must not be blank");
+        content = requireText(content, "content");
+        model = requireText(model, "model");
+    }
+
+    private static String requireText(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " must not be blank");
         }
-        content = content.trim();
+        return value.trim();
     }
 }
