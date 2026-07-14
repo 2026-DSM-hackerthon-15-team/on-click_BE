@@ -129,32 +129,47 @@ class ConsultingServiceTest {
     }
 
     @Test
-    void kstClosingBoundaryRejectsCurrentDateBeforeClosing() {
+    void acceptsCurrentDateBeforeClosing() {
         Store store = store(LocalDateTime.of(2026, 7, 1, 9, 0));
-        ConsultingService beforeClosing = serviceAt(
-                LocalDateTime.of(2026, 7, 13, 21, 59, 59)
-        );
+        LocalDateTime beforeClosingTime = LocalDateTime.of(2026, 7, 13, 21, 59, 59);
+        ConsultingService beforeClosing = serviceAt(beforeClosingTime);
+        Consulting pending = pendingConsulting(12L);
         given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(store);
+        given(jobManager.createPending(STORE_ID, TARGET_DATE, beforeClosingTime))
+                .willReturn(new ConsultingJobRegistration(12L, true));
+        given(consultingRepository.findByIdAndStoreId(12L, STORE_ID))
+                .willReturn(Optional.of(pending));
 
-        assertThatThrownBy(() -> beforeClosing.generate(
+        ConsultingCreationResult result = beforeClosing.generate(
                 jwt,
                 STORE_ID,
                 new ConsultingCreateRequest(TARGET_DATE)
-        )).isInstanceOfSatisfying(ApiException.class, exception ->
-                assertThat(exception.errorCode()).isEqualTo(ErrorCode.FUTURE_DATE_NOT_ALLOWED));
+        );
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.consulting().consultingId()).isEqualTo(12L);
+        verify(eventPublisher).publishEvent(new ConsultingGenerationRequestedEvent(12L));
     }
 
     @Test
-    void rejectsDateBeforeStoreCreationInKst() {
+    void acceptsDateBeforeStoreCreationInKst() {
         Store store = store(LocalDateTime.of(2026, 7, 13, 0, 30));
+        Consulting pending = pendingConsulting(13L);
         given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(store);
+        given(jobManager.createPending(STORE_ID, LocalDate.of(2026, 7, 12), NOW))
+                .willReturn(new ConsultingJobRegistration(13L, true));
+        given(consultingRepository.findByIdAndStoreId(13L, STORE_ID))
+                .willReturn(Optional.of(pending));
 
-        assertThatThrownBy(() -> consultingService.generate(
+        ConsultingCreationResult result = consultingService.generate(
                 jwt,
                 STORE_ID,
                 new ConsultingCreateRequest(LocalDate.of(2026, 7, 12))
-        )).isInstanceOfSatisfying(ApiException.class, exception ->
-                assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
+        );
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.consulting().consultingId()).isEqualTo(13L);
+        verify(eventPublisher).publishEvent(new ConsultingGenerationRequestedEvent(13L));
     }
 
     @Test

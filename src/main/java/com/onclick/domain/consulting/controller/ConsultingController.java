@@ -34,7 +34,7 @@ public class ConsultingController {
     public ResponseEntity<ConsultingDetailResponse> generate(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long storeId,
-            @Valid @RequestBody ConsultingCreateRequest request
+            @Valid @RequestBody(required = false) ConsultingCreateRequest request
     ) {
         ConsultingCreationResult result = consultingService.generate(jwt, storeId, request);
         Long consultingId = result.consulting().consultingId();

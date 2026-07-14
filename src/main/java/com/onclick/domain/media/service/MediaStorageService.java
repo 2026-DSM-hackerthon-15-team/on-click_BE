@@ -149,7 +149,9 @@ public class MediaStorageService {
         baseUrl = baseUrl.replaceAll("/+$", "");
         return baseUrl + "/public/media/" + mediaFile.getPublicId();
     }
-
+    public Path resolveStoredPath(MediaFile mediaFile) {
+        return resolveStoragePath(mediaFile.getStorageName());
+    }
     @Scheduled(fixedDelayString = "${app.media.cleanup-interval:PT1H}")
     @Transactional
     public void deleteExpiredOrphans() {

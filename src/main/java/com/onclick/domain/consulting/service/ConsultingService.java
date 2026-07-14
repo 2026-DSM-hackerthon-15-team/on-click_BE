@@ -40,9 +40,11 @@ public class ConsultingService {
             ConsultingCreateRequest request
     ) {
         Store store = storeAccessValidator.validate(jwt, storeId);
-        LocalDate targetDate = request == null ? null : request.targetDate();
+        LocalDate targetDate = request == null ? null : request.getTargetDate();
         LocalDateTime now = ConsultingTargetDatePolicy.now(clock);
-        validateTargetDate(store, targetDate, now);
+        if (targetDate == null) {
+            targetDate = ConsultingTargetDatePolicy.latestDueDate(store, now);
+        }
 
         ConsultingJobRegistration registration;
         try {
@@ -82,22 +84,6 @@ public class ConsultingService {
         return ConsultingDetailResponse.from(consulting);
     }
 
-    private void validateTargetDate(Store store, LocalDate targetDate, LocalDateTime now) {
-        if (targetDate == null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "컨설팅 대상 영업일을 입력해 주세요.");
-        }
-        LocalDate storeCreationDate = ConsultingTargetDatePolicy.storeCreationDate(store);
-        // Reject requests for dates before the store was created
-        if (storeCreationDate != null && targetDate.isBefore(storeCreationDate)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST);
-        }
-
-        // Reject requests for dates after the latest due date per policy
-        LocalDate latestDue = ConsultingTargetDatePolicy.latestDueDate(store, now);
-        if (targetDate.isAfter(latestDue)) {
-            throw new ApiException(ErrorCode.FUTURE_DATE_NOT_ALLOWED);
-        }
-    }
 
     private Consulting findByTargetDate(Long storeId, LocalDate targetDate) {
         return consultingRepository.findByStoreIdAndTargetDate(storeId, targetDate)

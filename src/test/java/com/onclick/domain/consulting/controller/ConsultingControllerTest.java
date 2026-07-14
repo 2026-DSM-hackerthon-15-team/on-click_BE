@@ -90,14 +90,18 @@ class ConsultingControllerTest {
     }
 
     @Test
-    void rejectsRequestWithoutTargetDate() throws Exception {
+    void acceptsRequestWithoutTargetDate() throws Exception {
+        given(consultingService.generate(
+                any(Jwt.class),
+                org.mockito.ArgumentMatchers.eq(3L),
+                any(ConsultingCreateRequest.class)
+        )).willReturn(new ConsultingCreationResult(response(), true));
+
         mockMvc.perform(post("/stores/3/consultings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
-
-        verify(consultingService, never()).generate(any(), any(), any());
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Location", "/stores/3/consultings/10"));
     }
 
     private ConsultingDetailResponse response() {

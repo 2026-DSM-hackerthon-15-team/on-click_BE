@@ -1,8 +1,12 @@
 package com.onclick.domain.marketing.service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
 
+import com.onclick.common.ai.dto.InstagramImageAttachment;
 import com.onclick.common.ai.dto.InstagramPublishRequest;
 import com.onclick.common.ai.dto.InstagramPublishResult;
 import com.onclick.common.ai.dto.InstagramPublishStatus;
@@ -46,8 +50,19 @@ public class MarketingPublicationTransactions {
         try {
             marketing.approve(KoreanTime.now(clock));
             marketing.beginPublishing(KoreanTime.now(clock));
-            List<String> imageUrls = marketing.getMediaFiles().stream()
-                    .map(mediaStorageService::publicUrl)
+            List<InstagramImageAttachment> images = marketing.getMediaFiles().stream()
+                    .map(mediaFile -> {
+                        Path path = mediaStorageService.resolveStoredPath(mediaFile);
+                        try {
+                            return new InstagramImageAttachment(
+                                    mediaFile.getOriginalName(),
+                                    Files.readAllBytes(path),
+                                    mediaFile.getContentType()
+                            );
+                        } catch (IOException exception) {
+                            throw new ApiException(ErrorCode.MEDIA_STORAGE_ERROR, "이미지 파일을 읽을 수 없습니다.", exception);
+                        }
+                    })
                     .toList();
             InstagramPublishRequest request = new InstagramPublishRequest(
                     store.getOwnerUserId(),
@@ -55,7 +70,7 @@ public class MarketingPublicationTransactions {
                     credentials.password(),
                     marketing.getContent(),
                     marketing.hashtagList(),
-                    imageUrls,
+                    images,
                     marketing.getIdempotencyKey()
             );
             return new PreparedPublication(marketing.getId(), request);

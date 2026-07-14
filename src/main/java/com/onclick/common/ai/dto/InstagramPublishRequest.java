@@ -8,12 +8,12 @@ public record InstagramPublishRequest(
         String instagramPassword,
         String content,
         List<String> hashtags,
-        List<String> imageUrls,
+        List<InstagramImageAttachment> images,
         String idempotencyKey
 ) {
     public InstagramPublishRequest {
         hashtags = hashtags == null ? List.of() : List.copyOf(hashtags);
-        imageUrls = imageUrls == null ? List.of() : List.copyOf(imageUrls);
+        images = images == null ? List.of() : List.copyOf(images);
         if (userId == null || userId <= 0) {
             throw new IllegalArgumentException("userId must be positive");
         }
@@ -23,9 +23,9 @@ public record InstagramPublishRequest(
         if (hashtags.size() > 30 || hashtags.stream().anyMatch(value -> value == null || value.isBlank())) {
             throw new IllegalArgumentException("hashtags must contain at most 30 non-blank items");
         }
-        if (imageUrls.isEmpty() || imageUrls.size() > 10
-                || imageUrls.stream().anyMatch(value -> value == null || !value.startsWith("https://"))) {
-            throw new IllegalArgumentException("imageUrls must contain between 1 and 10 HTTPS URLs");
+        if (images.isEmpty() || images.size() > 10
+                || images.stream().anyMatch(value -> value == null)) {
+            throw new IllegalArgumentException("images must contain between 1 and 10 image attachments");
         }
         requireLength(idempotencyKey, "idempotencyKey", 1, 100);
     }
@@ -45,7 +45,7 @@ public record InstagramPublishRequest(
                 + ", instagramUsername=" + instagramUsername
                 + ", instagramPassword=***, content=" + content
                 + ", hashtags=" + hashtags
-                + ", imageUrls=" + imageUrls
+                + ", images=" + images
                 + ", idempotencyKey=" + idempotencyKey + "]";
     }
 }

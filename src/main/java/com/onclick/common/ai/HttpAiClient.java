@@ -20,6 +20,7 @@ import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
+import com.onclick.common.ai.dto.InstagramImageAttachment;
 import com.onclick.common.ai.dto.InstagramPublishRequest;
 import com.onclick.common.ai.dto.InstagramPublishResult;
 import com.onclick.common.ai.dto.InstagramPublishStatus;
@@ -37,6 +38,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -179,11 +181,26 @@ public class HttpAiClient implements AiClient {
                     marketingId,
                     request
             );
-                InstagramPublishResult response = restClient.post()
+            MultipartBodyBuilder multipartBodyBuilder = new MultipartBodyBuilder();
+            multipartBodyBuilder.part("userId", request.userId());
+            multipartBodyBuilder.part("instagramUsername", request.instagramUsername());
+            multipartBodyBuilder.part("instagramPassword", request.instagramPassword());
+            multipartBodyBuilder.part("content", request.content());
+            multipartBodyBuilder.part("hashtags", request.hashtags());
+            multipartBodyBuilder.part("idempotencyKey", request.idempotencyKey());
+            for (InstagramImageAttachment image : request.images()) {
+                multipartBodyBuilder.part(
+                        "images",
+                        image.content(),
+                        MediaType.APPLICATION_OCTET_STREAM
+                ).filename(image.filename());
+            }
+
+            InstagramPublishResult response = restClient.post()
                     .uri(path, Map.of("marketingId", marketingId))
-                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
                     .headers(headers -> applyAuthorizationHeader(headers, bearerToken))
-                    .body(serializeRequest(request))
+                    .body(multipartBodyBuilder.build())
                     .retrieve()
                     .body(InstagramPublishResult.class);
             log.info(
@@ -232,12 +249,12 @@ public class HttpAiClient implements AiClient {
         for (String hashtag : request.hashtags()) {
             requireText(hashtag, "hashtags");
         }
-        if (request.imageUrls().isEmpty() || request.imageUrls().size() > 10) {
-            throw new IllegalArgumentException("imageUrls must contain between 1 and 10 items");
+        if (request.images().isEmpty() || request.images().size() > 10) {
+            throw new IllegalArgumentException("images must contain between 1 and 10 items");
         }
-        for (String imageUrl : request.imageUrls()) {
-            if (imageUrl == null || !imageUrl.startsWith("https://")) {
-                throw new IllegalArgumentException("imageUrls must contain HTTPS URLs");
+        for (InstagramImageAttachment image : request.images()) {
+            if (image == null || image.content() == null || image.content().length == 0) {
+                throw new IllegalArgumentException("images must contain non-empty image attachments");
             }
         }
         requireTextWithin(request.idempotencyKey(), "idempotencyKey", 100);
