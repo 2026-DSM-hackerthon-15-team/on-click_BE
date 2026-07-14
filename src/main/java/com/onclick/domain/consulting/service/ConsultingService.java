@@ -87,16 +87,10 @@ public class ConsultingService {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "컨설팅 대상 영업일을 입력해 주세요.");
         }
         LocalDate storeCreationDate = ConsultingTargetDatePolicy.storeCreationDate(store);
-        if (storeCreationDate != null && targetDate.isBefore(storeCreationDate)) {
+        if (storeCreationDate != null) {
             throw new ApiException(
                     ErrorCode.INVALID_REQUEST,
                     "매장 생성일 이전 영업일의 컨설팅은 생성할 수 없습니다."
-            );
-        }
-        if (targetDate.isAfter(ConsultingTargetDatePolicy.latestDueDate(store, now))) {
-            throw new ApiException(
-                    ErrorCode.FUTURE_DATE_NOT_ALLOWED,
-                    "매장 마감 전이거나 미래인 영업일의 컨설팅은 생성할 수 없습니다."
             );
         }
     }
