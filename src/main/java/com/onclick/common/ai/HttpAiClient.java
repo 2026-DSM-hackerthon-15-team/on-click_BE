@@ -354,16 +354,24 @@ public class HttpAiClient implements AiClient {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 log.info(
-                        "AI request started: path={}, attempt={}/{}",
+                        "AI request started: path={}, attempt={}/{}, request={}",
                         path,
                         attempt,
-                        maxAttempts
+                        maxAttempts,
+                        request
                 );
                 T response = restClient.post()
                         .uri(path)
                         .body(request)
                         .retrieve()
                         .body(responseType);
+                log.info(
+                        "AI response received: path={}, attempt={}/{}, response={}",
+                        path,
+                        attempt,
+                        maxAttempts,
+                        response
+                );
                 if (response == null) {
                     throw failure(
                             path,
@@ -371,12 +379,6 @@ public class HttpAiClient implements AiClient {
                             ErrorCode.AI_RESPONSE_INVALID
                     );
                 }
-                log.info(
-                        "AI request succeeded: path={}, attempt={}/{}",
-                        path,
-                        attempt,
-                        maxAttempts
-                );
                 return response;
             } catch (RestClientResponseException exception) {
                 lastFailure = exception;
