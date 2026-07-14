@@ -2,7 +2,6 @@ package com.onclick.common.ai;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -11,7 +10,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.onclick.common.ai.dto.ChatGenerationRequest;
 import com.onclick.common.ai.dto.ChatGenerationResult;
 import com.onclick.common.ai.dto.ClosingSalesForecastRequest;
@@ -22,7 +20,6 @@ import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
-import com.onclick.common.time.KoreanTime;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
@@ -73,9 +70,10 @@ public class HttpAiClient implements AiClient {
                     request,
                     ClosingSalesForecastWireResponse.class
             );
+            validateClosingSalesResponse(request, response);
             return new ClosingSalesForecastResult(
-                    requireNonNegative(response.expectedClosingSales(), "expectedClosingSales"),
-                    toKoreanDateTime(response.generatedAt())
+                    response.forecastClosingSalesAmount(),
+                    response.generatedAt()
             );
         });
     }
@@ -89,9 +87,10 @@ public class HttpAiClient implements AiClient {
                     request,
                     TomorrowVisitorsForecastWireResponse.class
             );
+            validateTomorrowVisitorsResponse(request, response);
             return new TomorrowVisitorsForecastResult(
-                    requireNonNegative(response.expectedVisitors(), "expectedVisitors"),
-                    toKoreanDateTime(response.generatedAt())
+                    response.expectedVisitors(),
+                    response.generatedAt()
             );
         });
     }
@@ -145,11 +144,40 @@ public class HttpAiClient implements AiClient {
         });
     }
 
-    private LocalDateTime toKoreanDateTime(Instant instant) {
-        if (instant == null) {
-            throw new IllegalArgumentException("generatedAt must not be null");
+    private void validateClosingSalesResponse(
+            ClosingSalesForecastRequest request,
+            ClosingSalesForecastWireResponse response
+    ) {
+        if (!Objects.equals(request.storeId(), response.storeId())) {
+            throw new IllegalArgumentException("storeId does not match the request");
         }
-        return KoreanTime.fromInstant(instant);
+        if (!Objects.equals(request.asOf().toLocalDate(), response.businessDate())) {
+            throw new IllegalArgumentException("businessDate does not match the request");
+        }
+        if (!"KRW".equals(response.currency())) {
+            throw new IllegalArgumentException("currency must be KRW");
+        }
+        requireNonNegative(response.observedSalesAmount(), "observedSalesAmount");
+        requireNonNegative(response.forecastClosingSalesAmount(), "forecastClosingSalesAmount");
+        requireText(response.model(), "model");
+        requireNonNegative(response.sampleDays(), "sampleDays");
+        Objects.requireNonNull(response.generatedAt(), "generatedAt must not be null");
+    }
+
+    private void validateTomorrowVisitorsResponse(
+            TomorrowVisitorsForecastRequest request,
+            TomorrowVisitorsForecastWireResponse response
+    ) {
+        if (!Objects.equals(request.storeId(), response.storeId())) {
+            throw new IllegalArgumentException("storeId does not match the request");
+        }
+        if (!Objects.equals(request.baseDate().plusDays(1), response.targetDate())) {
+            throw new IllegalArgumentException("targetDate must be the day after baseDate");
+        }
+        requireNonNegative(response.expectedVisitors(), "expectedVisitors");
+        requireText(response.model(), "model");
+        requireNonNegative(response.sampleDays(), "sampleDays");
+        Objects.requireNonNull(response.generatedAt(), "generatedAt must not be null");
     }
 
     private void validateMarketingRequest(MarketingGenerationRequest request) {
@@ -188,6 +216,13 @@ public class HttpAiClient implements AiClient {
     }
 
     private long requireNonNegative(Long value, String field) {
+        if (value == null || value < 0) {
+            throw new IllegalArgumentException(field + " must be non-negative");
+        }
+        return value;
+    }
+
+    private int requireNonNegative(Integer value, String field) {
         if (value == null || value < 0) {
             throw new IllegalArgumentException(field + " must be non-negative");
         }
@@ -451,10 +486,26 @@ public class HttpAiClient implements AiClient {
         return path;
     }
 
-    private record ClosingSalesForecastWireResponse(Long expectedClosingSales, Instant generatedAt) {
+    private record ClosingSalesForecastWireResponse(
+            Long storeId,
+            LocalDate businessDate,
+            String currency,
+            Long observedSalesAmount,
+            Long forecastClosingSalesAmount,
+            String model,
+            Integer sampleDays,
+            LocalDateTime generatedAt
+    ) {
     }
 
-    private record TomorrowVisitorsForecastWireResponse(Long expectedVisitors, Instant generatedAt) {
+    private record TomorrowVisitorsForecastWireResponse(
+            Long storeId,
+            LocalDate targetDate,
+            Long expectedVisitors,
+            String model,
+            Integer sampleDays,
+            LocalDateTime generatedAt
+    ) {
     }
 
     private record ConsultingGenerationWireResponse(
@@ -475,7 +526,7 @@ public class HttpAiClient implements AiClient {
     }
 
     private record ChatGenerationWireResponse(
-            @JsonAlias("content") String answer,
+            String answer,
             List<AiToolExecutionWireResponse> usedTools,
             List<AiCitationWireResponse> citations,
             String model,
@@ -484,7 +535,7 @@ public class HttpAiClient implements AiClient {
     }
 
     private record MarketingGenerationWireResponse(
-            @JsonAlias({"caption", "answer"}) String content,
+            String content,
             String model
     ) {
     }
