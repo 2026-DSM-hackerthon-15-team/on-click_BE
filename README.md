@@ -61,7 +61,7 @@ docker compose up -d --build
 
 판매 기록은 `GET /stores/{storeId}/sales/transactions?page=0&size=20&sortBy=soldAt&sortDirection=desc`로 조회합니다. `size`는 최대 100이며, 정렬 필드는 `soldAt`, `createdAt`, `saleId`, `status`를 지원합니다.
 
-배포 매장에 대시보드용 POS 샘플 데이터를 넣을 때는 `scripts/seed-pos-data.mjs`를 사용합니다. 기본값은 `http://cowtree28-server.duckdns.org`에 최근 30일간 하루 50건씩 총 1,500건을 생성하고, 과거 거래 약 5%를 취소 상태로 만듭니다. 활성 상품만 사용하며 고정 `clientTransactionId`와 로컬 manifest로 재실행 중복을 방지합니다.
+배포 매장에 대시보드용 POS 샘플 데이터를 넣을 때는 `scripts/seed-pos-data.mjs`를 사용합니다. 매장 업종에 맞는 기본 상품 10종 중 없는 상품을 먼저 등록한 뒤, 기본값으로 `http://cowtree28-server.duckdns.org`에 최근 30일간 하루 50건씩 총 1,500건을 생성하고 과거 거래 약 5%를 취소 상태로 만듭니다. 활성 상품만 사용하며 고정 `clientTransactionId`와 로컬 manifest로 재실행 중복을 방지합니다.
 
 ```bash
 ACCOUNT_ID='<계정 아이디>' \

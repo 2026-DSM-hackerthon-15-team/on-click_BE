@@ -42,8 +42,9 @@ async function main() {
     await login();
   }
 
-  const storeId = await resolveStoreId();
-  const products = await loadActiveProducts(storeId);
+  const store = await resolveStore();
+  const storeId = Number(store.id);
+  const products = await ensureActiveProducts(store);
   const manifestPath = resolve(
     config.manifestPath || `.pos-seed/pos-${storeId}-${config.seedVersion}.json`,
   );
@@ -71,10 +72,41 @@ async function main() {
 }
 
 async function checkHealth() {
-  const response = await fetchWithTimeout(`${config.baseUrl}/actuator/health`, {}, 10_000);
-  if (!response.ok) {
-    throw new Error(`health 확인 실패: HTTP ${response.status}`);
+  const healthPath = "/actuator/health";
+  for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
+    const healthUrl = `${config.baseUrl}${healthPath}`;
+    let response;
+    try {
+      response = await fetchWithTimeout(healthUrl, {}, 30_000);
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error(`health 확인 시간 초과: ${healthUrl}`);
+      }
+      throw new Error(`health 연결 실패: ${healthUrl} - ${error.message}`, { cause: error });
+    }
+
+    if (isRedirect(response.status)) {
+      const location = response.headers.get("location");
+      if (!location) {
+        throw new Error(`health 요청이 Location 없이 HTTP ${response.status}를 반환했습니다.`);
+      }
+      const target = new URL(location, healthUrl);
+      if (!target.pathname.endsWith(healthPath)) {
+        throw new Error(
+          `health 요청이 예상하지 못한 주소로 이동합니다: HTTP ${response.status} -> ${target.href}`,
+        );
+      }
+      const basePath = target.pathname.slice(0, -healthPath.length).replace(/\/+$/, "");
+      config.baseUrl = `${target.origin}${basePath}`;
+      console.log(`서버 리디렉션 반영: ${config.baseUrl}`);
+      continue;
+    }
+    if (!response.ok) {
+      throw new Error(`health 확인 실패: HTTP ${response.status}`);
+    }
+    return;
   }
+  throw new Error("health 요청의 리디렉션 횟수가 너무 많습니다.");
 }
 
 async function login() {
@@ -105,7 +137,7 @@ async function refreshLogin() {
   await refreshPromise;
 }
 
-async function resolveStoreId() {
+async function resolveStore() {
   const { body: stores } = await fetchJson("/stores");
   if (!Array.isArray(stores) || stores.length === 0) {
     throw new Error("계정에 등록된 매장이 없습니다.");
@@ -114,21 +146,41 @@ async function resolveStoreId() {
     if (!stores.some((store) => Number(store.id) === config.storeId)) {
       throw new Error(`STORE_ID=${config.storeId}는 로그인 계정 소유 매장이 아닙니다.`);
     }
-    return config.storeId;
+    return stores.find((store) => Number(store.id) === config.storeId);
   }
   if (stores.length !== 1) {
     const candidates = stores.map((store) => `${store.id}:${store.name}`).join(", ");
     throw new Error(`매장이 여러 개입니다. STORE_ID를 지정해 주세요: ${candidates}`);
   }
-  return Number(stores[0].id);
+  return stores[0];
 }
 
-async function loadActiveProducts(storeId) {
+async function ensureActiveProducts(store) {
+  const storeId = Number(store.id);
   const { body } = await fetchJson(`/stores/${storeId}/products`);
   if (!Array.isArray(body)) {
     throw new Error("상품 목록 응답 형식이 올바르지 않습니다.");
   }
-  const products = body
+  const products = [...body];
+  const existingNames = new Set(products.map((product) => normalizeProductName(product.name)));
+  const missingCatalog = productCatalog(store.industry).filter(
+    (product) => !existingNames.has(normalizeProductName(product.name)),
+  );
+
+  if (config.dryRun && missingCatalog.length > 0) {
+    console.log(`상품 등록 예정: ${missingCatalog.length}개 (DRY_RUN으로 저장하지 않음)`);
+  } else {
+    for (const product of missingCatalog) {
+      const { body: created } = await fetchJson(`/stores/${storeId}/products`, {
+        method: "POST",
+        body: product,
+      });
+      products.push(created);
+      console.log(`상품 등록: ${created.name} (${created.price}원)`);
+    }
+  }
+
+  const activeProducts = products
     .filter((product) => product.active)
     .map((product) => ({
       id: Number(product.id),
@@ -137,15 +189,88 @@ async function loadActiveProducts(storeId) {
     }))
     .sort((left, right) => left.id - right.id);
 
-  if (products.length === 0) {
-    throw new Error("판매 가능한 활성 상품이 없습니다. 상품을 먼저 등록해 주세요.");
+  if (activeProducts.length === 0) {
+    const dryRunHint = config.dryRun
+      ? " DRY_RUN을 해제하면 업종별 샘플 상품을 먼저 등록합니다."
+      : "";
+    throw new Error(`판매 가능한 활성 상품이 없습니다.${dryRunHint}`);
   }
-  if (products.some((product) => !Number.isSafeInteger(product.id)
+  if (activeProducts.some((product) => !Number.isSafeInteger(product.id)
       || !Number.isSafeInteger(product.price)
       || product.price < 0)) {
     throw new Error("상품 ID 또는 가격이 안전한 정수 범위를 벗어났습니다.");
   }
-  return products;
+  return activeProducts;
+}
+
+function productCatalog(industry) {
+  const catalogs = {
+    CAFE: [
+      ["아메리카노", 4500],
+      ["카페라떼", 5200],
+      ["바닐라라떼", 5800],
+      ["카라멜마키아토", 6000],
+      ["콜드브루", 5500],
+      ["레몬에이드", 6000],
+      ["딸기스무디", 6500],
+      ["초코케이크", 6500],
+      ["크루아상", 3800],
+      ["샌드위치", 7200],
+    ],
+    RESTAURANT: [
+      ["김치찌개", 9000],
+      ["된장찌개", 9000],
+      ["제육볶음", 11000],
+      ["비빔밥", 9500],
+      ["불고기정식", 13000],
+      ["냉면", 10000],
+      ["만두", 6000],
+      ["계란말이", 8000],
+      ["공기밥", 1000],
+      ["음료", 2000],
+    ],
+    RETAIL: [
+      ["생수", 1000],
+      ["탄산음료", 2000],
+      ["스낵", 1800],
+      ["컵라면", 2200],
+      ["도시락", 5500],
+      ["샌드위치", 3800],
+      ["우유", 2500],
+      ["아이스크림", 2000],
+      ["휴지", 4500],
+      ["세제", 8000],
+    ],
+    SERVICE: [
+      ["기본 서비스", 20000],
+      ["프리미엄 서비스", 35000],
+      ["상담 30분", 15000],
+      ["상담 60분", 28000],
+      ["정기 이용권", 80000],
+      ["일회 이용권", 12000],
+      ["추가 옵션 A", 5000],
+      ["추가 옵션 B", 8000],
+      ["현장 서비스", 25000],
+      ["예약 서비스", 30000],
+    ],
+    OTHER: [
+      ["기본 상품", 5000],
+      ["인기 상품", 7500],
+      ["프리미엄 상품", 12000],
+      ["세트 상품 A", 15000],
+      ["세트 상품 B", 18000],
+      ["추가 상품 A", 3000],
+      ["추가 상품 B", 4500],
+      ["시즌 상품", 9000],
+      ["할인 상품", 6000],
+      ["한정 상품", 20000],
+    ],
+  };
+  return (catalogs[industry] || catalogs.OTHER).map(([name, price]) => ({ name, price }));
+}
+
+function normalizeProductName(name) {
+  return String(name || "").trim().toLocaleLowerCase("ko-KR");
 }
 
 async function loadOrCreateManifest(path, storeId, products) {
@@ -320,6 +445,15 @@ async function fetchJson(path, options = {}) {
     }
 
     const responseBody = await parseBody(response);
+    if (isRedirect(response.status)) {
+      const location = response.headers.get("location");
+      const target = location
+        ? new URL(location, `${config.baseUrl}${path}`).href
+        : "Location 헤더 없음";
+      throw new Error(
+        `${method} ${path} 리디렉션 거부: HTTP ${response.status} -> ${target}. BASE_URL을 최종 주소로 설정해 주세요.`,
+      );
+    }
     if (response.ok) {
       return { status: response.status, body: responseBody };
     }
@@ -337,7 +471,10 @@ async function fetchJson(path, options = {}) {
     }
 
     const detail = responseBody?.message || responseBody?.errorCode || JSON.stringify(responseBody);
-    throw new Error(`${method} ${path} 실패: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
+    const allow = response.headers.get("allow");
+    throw new Error(
+      `${method} ${path} 실패: HTTP ${response.status}${allow ? ` (Allow: ${allow})` : ""}${detail ? ` - ${detail}` : ""}`,
+    );
   }
   throw new Error(`${method} ${path} 재시도 횟수를 초과했습니다.`);
 }
@@ -346,10 +483,14 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await fetch(url, { ...options, redirect: "manual", signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function isRedirect(status) {
+  return status >= 300 && status < 400;
 }
 
 async function parseBody(response) {
