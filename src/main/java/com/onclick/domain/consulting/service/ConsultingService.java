@@ -87,6 +87,16 @@ public class ConsultingService {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "컨설팅 대상 영업일을 입력해 주세요.");
         }
         LocalDate storeCreationDate = ConsultingTargetDatePolicy.storeCreationDate(store);
+        // Reject requests for dates before the store was created
+        if (storeCreationDate != null && targetDate.isBefore(storeCreationDate)) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST);
+        }
+
+        // Reject requests for dates after the latest due date per policy
+        LocalDate latestDue = ConsultingTargetDatePolicy.latestDueDate(store, now);
+        if (targetDate.isAfter(latestDue)) {
+            throw new ApiException(ErrorCode.FUTURE_DATE_NOT_ALLOWED);
+        }
     }
 
     private Consulting findByTargetDate(Long storeId, LocalDate targetDate) {
