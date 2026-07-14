@@ -17,6 +17,7 @@ public class AiHttpProperties {
     private Duration connectTimeout = Duration.ofSeconds(2);
     private Duration readTimeout = Duration.ofSeconds(60);
     private int maxAttempts = 2;
+    private String internalApiKey;
     private final Paths paths = new Paths();
 
     @Getter
@@ -28,6 +29,7 @@ public class AiHttpProperties {
         private String dailyConsulting = "/ai/consultings/daily";
         private String chat = "/ai/chat";
         private String marketing = "/ai/marketings/copy";
+        private String instagramPublish = "/ai/marketings/{marketingId}/publish/instagram";
 
     }
 }

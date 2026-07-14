@@ -1,6 +1,7 @@
 package com.onclick.common.ai.dto;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 
@@ -19,6 +20,7 @@ public record ClosingSalesForecastRequest(
         if (salesData.isEmpty()) {
             throw new IllegalArgumentException("salesData must not be empty");
         }
+        asOf = asOf.truncatedTo(ChronoUnit.SECONDS);
         salesData = List.copyOf(salesData);
     }
 }

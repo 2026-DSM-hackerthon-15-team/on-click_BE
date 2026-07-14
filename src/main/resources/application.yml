@@ -42,12 +42,14 @@ app:
       connect-timeout: ${AI_CONNECT_TIMEOUT:PT2S}
       read-timeout: ${AI_READ_TIMEOUT:PT60S}
       max-attempts: ${AI_MAX_ATTEMPTS:2}
+      internal-api-key: ${AI_INTERNAL_API_KEY:}
       paths:
         closing-sales: ${AI_CLOSING_SALES_PATH:/ai/forecasts/closing-sales}
         tomorrow-visitors: ${AI_TOMORROW_VISITORS_PATH:/ai/forecasts/tomorrow-visitors}
         daily-consulting: ${AI_DAILY_CONSULTING_PATH:/ai/consultings/daily}
         chat: ${AI_CHAT_PATH:/ai/chat}
         marketing: ${AI_MARKETING_PATH:/ai/marketings/copy}
+        instagram-publish: ${AI_INSTAGRAM_PUBLISH_PATH:/ai/marketings/{marketingId}/publish/instagram}
   media:
     storage-directory: ${MEDIA_STORAGE_DIRECTORY:/tmp/on-click-media}
     public-base-url: ${MEDIA_PUBLIC_BASE_URL:http://localhost:8080}

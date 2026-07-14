@@ -1,6 +1,8 @@
 package com.onclick.common.ai;
 
 import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -18,15 +20,22 @@ import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
+import com.onclick.common.ai.dto.InstagramPublishRequest;
+import com.onclick.common.ai.dto.InstagramPublishResult;
+import com.onclick.common.ai.dto.InstagramPublishStatus;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -50,15 +59,21 @@ public class HttpAiClient implements AiClient {
 
     private final RestClient restClient;
     private final AiHttpProperties properties;
+    private final ObjectMapper objectMapper;
 
     @Autowired
     public HttpAiClient(AiHttpProperties properties) {
-        this(properties, createRestClient(properties));
+        this(properties, createRestClient(properties), createObjectMapper());
     }
 
     HttpAiClient(AiHttpProperties properties, RestClient restClient) {
+        this(properties, restClient, createObjectMapper());
+    }
+
+    HttpAiClient(AiHttpProperties properties, RestClient restClient, ObjectMapper objectMapper) {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.restClient = Objects.requireNonNull(restClient, "restClient must not be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
     }
 
     @Override
@@ -144,6 +159,142 @@ public class HttpAiClient implements AiClient {
         });
     }
 
+    @Override
+    public InstagramPublishResult publishInstagram(
+            Long marketingId,
+            InstagramPublishRequest request,
+            String bearerToken
+    ) {
+        String path = properties.getPaths().getInstagramPublish();
+        try {
+            validateInstagramPublishRequest(marketingId, request, bearerToken);
+        } catch (RuntimeException exception) {
+            throw failure(path, exception, ErrorCode.INVALID_INSTAGRAM_POST);
+        }
+
+        try {
+            log.info(
+                    "AI Instagram publish started: path={}, marketingId={}, request={}",
+                    path,
+                    marketingId,
+                    request
+            );
+            InstagramPublishResult response = restClient.post()
+                    .uri(path, Map.of("marketingId", marketingId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> headers.setBearerAuth(bearerToken))
+                    .body(serializeRequest(request))
+                    .retrieve()
+                    .body(InstagramPublishResult.class);
+            log.info(
+                    "AI Instagram response received: path={}, marketingId={}, response={}",
+                    path,
+                    marketingId,
+                    response
+            );
+            validateInstagramPublishResponse(marketingId, response);
+            return response;
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (RestClientResponseException exception) {
+            throw failure(path, exception, mapInstagramPublishError(exception));
+        } catch (ResourceAccessException exception) {
+            ErrorCode errorCode = hasCause(exception, HttpTimeoutException.class)
+                    || hasCause(exception, SocketTimeoutException.class)
+                    ? ErrorCode.INSTAGRAM_PUBLISH_TIMEOUT
+                    : ErrorCode.AI_SERVICE_UNAVAILABLE;
+            throw failure(path, exception, errorCode);
+        } catch (RestClientException exception) {
+            throw failure(path, exception, ErrorCode.AI_RESPONSE_INVALID);
+        } catch (RuntimeException exception) {
+            throw failure(path, exception, ErrorCode.AI_RESPONSE_INVALID);
+        }
+    }
+
+    private void validateInstagramPublishRequest(
+            Long marketingId,
+            InstagramPublishRequest request,
+            String bearerToken
+    ) {
+        if (marketingId == null || marketingId <= 0) {
+            throw new IllegalArgumentException("marketingId must be positive");
+        }
+        Objects.requireNonNull(request, "request must not be null");
+        if (request.userId() == null || request.userId() <= 0) {
+            throw new IllegalArgumentException("userId must be positive");
+        }
+        requireTextWithin(request.instagramUsername(), "instagramUsername", 100);
+        requireTextBetween(request.instagramPassword(), "instagramPassword", 8, 200);
+        requireTextWithin(request.content(), "content", 2_200);
+        if (request.hashtags().size() > 30) {
+            throw new IllegalArgumentException("hashtags must contain at most 30 items");
+        }
+        for (String hashtag : request.hashtags()) {
+            requireText(hashtag, "hashtags");
+        }
+        if (request.imageUrls().isEmpty() || request.imageUrls().size() > 10) {
+            throw new IllegalArgumentException("imageUrls must contain between 1 and 10 items");
+        }
+        for (String imageUrl : request.imageUrls()) {
+            if (imageUrl == null || !imageUrl.startsWith("https://")) {
+                throw new IllegalArgumentException("imageUrls must contain HTTPS URLs");
+            }
+        }
+        requireTextWithin(request.idempotencyKey(), "idempotencyKey", 100);
+        requireText(bearerToken, "bearerToken");
+    }
+
+    private void validateInstagramPublishResponse(Long marketingId, InstagramPublishResult response) {
+        Objects.requireNonNull(response, "response must not be null");
+        if (!Objects.equals(marketingId, response.marketingId())) {
+            throw new IllegalArgumentException("marketingId does not match the request");
+        }
+        if (!"INSTAGRAM".equals(response.platform())) {
+            throw new IllegalArgumentException("platform must be INSTAGRAM");
+        }
+        Objects.requireNonNull(response.status(), "status must not be null");
+        if (response.status() == InstagramPublishStatus.PROCESSING) {
+            throw new IllegalArgumentException("PROCESSING is not a final synchronous response");
+        }
+        if (response.status() == InstagramPublishStatus.PUBLISHED) {
+            requireText(response.externalPostId(), "externalPostId");
+            if (response.publishedUrl() == null || !response.publishedUrl().startsWith("https://")) {
+                throw new IllegalArgumentException("publishedUrl must be an HTTPS URL");
+            }
+            Objects.requireNonNull(response.publishedAt(), "publishedAt must not be null");
+        } else if (response.status() == InstagramPublishStatus.FAILED) {
+            requireText(response.failureReason(), "failureReason");
+        }
+    }
+
+    private ErrorCode mapInstagramPublishError(RestClientResponseException exception) {
+        int status = exception.getStatusCode().value();
+        String responseBody = exception.getResponseBodyAsString().toUpperCase(java.util.Locale.ROOT);
+        return switch (status) {
+            case 400 -> ErrorCode.INVALID_INSTAGRAM_POST;
+            case 409 -> ErrorCode.DUPLICATE_PUBLISH_REQUEST;
+            case 422 -> responseBody.contains("CHALLENGE")
+                    ? ErrorCode.INSTAGRAM_LOGIN_CHALLENGE_REQUIRED
+                    : ErrorCode.INSTAGRAM_CREDENTIALS_INVALID;
+            case 502 -> ErrorCode.BROWSER_MCP_UNAVAILABLE;
+            case 504 -> ErrorCode.INSTAGRAM_PUBLISH_TIMEOUT;
+            default -> status >= 500
+                    ? ErrorCode.AI_SERVICE_UNAVAILABLE
+                    : ErrorCode.AI_REQUEST_REJECTED;
+        };
+    }
+
+    private boolean hasCause(Throwable throwable, Class<? extends Throwable> causeType) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (causeType.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
     private void validateClosingSalesResponse(
             ClosingSalesForecastRequest request,
             ClosingSalesForecastWireResponse response
@@ -206,6 +357,15 @@ public class HttpAiClient implements AiClient {
         String text = requireText(value, field);
         if (text.length() > maxLength) {
             throw new IllegalArgumentException(field + " must be at most " + maxLength + " characters");
+        }
+    }
+
+    private void requireTextBetween(String value, String field, int minLength, int maxLength) {
+        String text = requireText(value, field);
+        if (text.length() < minLength || text.length() > maxLength) {
+            throw new IllegalArgumentException(
+                    field + " must be between " + minLength + " and " + maxLength + " characters"
+            );
         }
     }
 
@@ -362,7 +522,9 @@ public class HttpAiClient implements AiClient {
                 );
                 T response = restClient.post()
                         .uri(path)
-                        .body(request)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .headers(headers -> applyInternalApiKey(path, headers))
+                        .body(serializeRequest(request))
                         .retrieve()
                         .body(responseType);
                 log.info(
@@ -413,11 +575,15 @@ public class HttpAiClient implements AiClient {
         String upstreamStatus = cause instanceof RestClientResponseException responseException
                 ? Integer.toString(responseException.getStatusCode().value())
                 : "none";
+        String upstreamBody = cause instanceof RestClientResponseException responseException
+                ? responseBodyPreview(responseException)
+                : "none";
         String causeType = cause == null ? "unknown" : cause.getClass().getSimpleName();
         log.warn(
-                "AI request failed: path={}, upstreamStatus={}, cause={}, errorCode={}",
+                "AI request failed: path={}, upstreamStatus={}, upstreamBody={}, cause={}, errorCode={}",
                 path,
                 upstreamStatus,
+                upstreamBody,
                 causeType,
                 errorCode
         );
@@ -455,6 +621,46 @@ public class HttpAiClient implements AiClient {
         return builder.build();
     }
 
+    private static ObjectMapper createObjectMapper() {
+        return new ObjectMapper()
+                .findAndRegisterModules()
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    }
+
+    private String serializeRequest(Object request) {
+        try {
+            return objectMapper.writeValueAsString(request);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Failed to serialize AI request", exception);
+        }
+    }
+
+    private void applyInternalApiKey(String path, org.springframework.http.HttpHeaders headers) {
+        if (!requiresInternalApiKey(path)) {
+            return;
+        }
+        String internalApiKey = requireSetting(properties.getInternalApiKey(), "AI_INTERNAL_API_KEY");
+        headers.set("X-Internal-Api-Key", internalApiKey);
+    }
+
+    private boolean requiresInternalApiKey(String path) {
+        return Objects.equals(path, properties.getPaths().getClosingSales())
+                || Objects.equals(path, properties.getPaths().getTomorrowVisitors())
+                || Objects.equals(path, properties.getPaths().getMarketing());
+    }
+
+    private String responseBodyPreview(RestClientResponseException exception) {
+        String body = exception.getResponseBodyAsString();
+        if (body == null || body.isBlank()) {
+            return "<empty>";
+        }
+        String normalized = body.replace('\r', ' ').replace('\n', ' ').trim();
+        if (normalized.length() <= 1_000) {
+            return normalized;
+        }
+        return normalized.substring(0, 1_000) + "...";
+    }
+
     private static String requireSetting(String value, String settingName) {
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(
@@ -478,6 +684,7 @@ public class HttpAiClient implements AiClient {
         requirePath(paths.getDailyConsulting(), "AI_DAILY_CONSULTING_PATH");
         requirePath(paths.getChat(), "AI_CHAT_PATH");
         requirePath(paths.getMarketing(), "AI_MARKETING_PATH");
+        requirePath(paths.getInstagramPublish(), "AI_INSTAGRAM_PUBLISH_PATH");
     }
 
     private static String requirePath(String value, String settingName) {
