@@ -1,6 +1,6 @@
 package com.onclick.domain.chat.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import com.onclick.domain.chat.entity.ChatMessage;
 import com.onclick.domain.chat.entity.ChatMessageRole;
@@ -14,8 +14,8 @@ public record ChatMessageResponse(
         ChatMessageStatus status,
         String content,
         int retryCount,
-        Instant createdAt,
-        Instant updatedAt
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
 
     public static ChatMessageResponse from(ChatMessage message) {
@@ -25,7 +25,9 @@ public record ChatMessageResponse(
                 message.getClientMessageId(),
                 message.getRole(),
                 message.getStatus(),
-                message.getContent(),
+                message.getStatus() == ChatMessageStatus.PENDING && message.getContent().isEmpty()
+                        ? null
+                        : message.getContent(),
                 message.getRetryCount(),
                 message.getCreatedAt(),
                 message.getUpdatedAt()

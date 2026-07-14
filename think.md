@@ -124,12 +124,11 @@
 - [x] DB rollback/commit과 물리 파일 정합성, 24시간 orphan 정리
 - [x] 마케팅 AI 초안 생성·목록·상세·수정·승인과 상태 관리
 - [x] carousel 이미지 순서 영속화
-- [x] Instagram OAuth 연결 시작·callback·상태 조회·해제
-- [x] OAuth state 해시 저장, 비관적 잠금 기반 1회 소비, 만료 정리
-- [x] access token AES-256-GCM 암호화, 만료 전 갱신, 연결 해제 시 권한 폐기 시도
-- [x] 게시 작업의 원자적 DB claim과 동시 실행 차단
-- [x] 외부 게시 결과 불명 시 자동 재게시하지 않고 `FAILED`로 전환
-- [x] AI·Instagram mock/HTTP provider 전환 설정
+- [x] 매장과 `InstagramAccount`의 1:1 연결 및 계정 ID·평문 비밀번호 저장
+- [x] 매장 소유자 전용 Instagram 계정 등록·조회 API
+- [x] 기존 Meta OAuth·Graph API·callback·토큰 저장 및 자동 게시 경로 제거
+- [x] 마케팅 승인은 외부 게시 없이 `APPROVED` 상태까지 동기 처리
+- [x] AI mock/HTTP provider 전환 설정
 
 ### 실제 AI 서버 연결 준비
 
@@ -157,9 +156,9 @@
   - 현재 실행 환경은 Docker socket 접근이 거부되어 실제 PostgreSQL 컨테이너 실행은 불가능했다.
   - H2 PostgreSQL 호환 모드의 V1→V4 이관·제약·schema validation 테스트는 통과했다.
 - [ ] 프론트 저장소에서 `role`, 기존 `transactionId`, 방문자 입력 API 제거
-- [ ] 프론트에서 `saleId`, `clientMessageId`, 채팅·게시 polling 흐름 연결
-- [ ] 운영 공개 HTTPS 미디어 URL과 Meta callback URL 설정
-- [ ] 실제 AI/Meta 자격 증명으로 provider별 staging end-to-end 검증
+- [ ] 프론트에서 `saleId`, `clientMessageId`와 Instagram 계정 등록 흐름 연결
+- [ ] 브라우저 MCP가 승인 콘텐츠와 저장된 Instagram 계정으로 게시하는 자동화 연결
+- [ ] 실제 AI provider staging end-to-end 검증
 - [ ] 표준 Gradle 실행이 허용된 환경에서 `./gradlew clean build` 재실행
   - 현재 sandbox에서는 Gradle cache 쓰기와 로컬 lock listener가 제한되어, 동일 의존성 classpath로 `javac`와 JUnit Platform 전체 테스트를 직접 실행했다.
 

@@ -1,11 +1,13 @@
 package com.onclick.domain.consulting.service;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
+import com.onclick.domain.consulting.TestFieldSetter;
 import com.onclick.domain.auth.entity.User;
 import com.onclick.domain.product.entity.Product;
+import com.onclick.domain.sale.entity.SaleStatus;
 import com.onclick.domain.sale.entity.SaleTransaction;
 import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.domain.store.entity.Store;
@@ -16,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -37,22 +38,24 @@ class ConsultingRequestFactoryTest {
 
     @BeforeEach
     void setUp() {
-        requestFactory = new ConsultingRequestFactory(storeRepository, saleTransactionRepository);
+        requestFactory = new ConsultingRequestFactory(
+                storeRepository,
+                saleTransactionRepository
+        );
     }
 
     @Test
     void aggregatesOnlyCompletedTransactionsIntoProductAndHourlyInputs() {
         Store store = new Store(
                 new User("owner", "hash"),
-                "강남점",
-                "Asia/Seoul"
+                "강남점"
         );
-        ReflectionTestUtils.setField(store, "id", STORE_ID);
+        TestFieldSetter.setField(store, "id", STORE_ID);
         Product coffee = product(10L, "커피");
         Product cake = product(11L, "케이크");
         SaleTransaction first = transaction(
                 "TX-1",
-                Instant.parse("2026-07-13T00:10:00Z"),
+                LocalDateTime.of(2026, 7, 13, 9, 10),
                 coffee,
                 2,
                 8_000
@@ -60,27 +63,20 @@ class ConsultingRequestFactoryTest {
         first.addItem(2, cake, 1, 5_000);
         SaleTransaction second = transaction(
                 "TX-2",
-                Instant.parse("2026-07-13T01:20:00Z"),
+                LocalDateTime.of(2026, 7, 13, 10, 20),
                 coffee,
                 1,
                 4_000
         );
-        SaleTransaction cancelled = transaction(
-                "TX-3",
-                Instant.parse("2026-07-13T01:30:00Z"),
-                coffee,
-                10,
-                40_000
-        );
-        cancelled.cancel(Instant.parse("2026-07-13T02:00:00Z"));
         given(storeRepository.findById(STORE_ID)).willReturn(java.util.Optional.of(store));
         given(saleTransactionRepository
-                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
+                .findAllByStoreIdAndStatusAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
                         STORE_ID,
-                        Instant.parse("2026-07-12T15:00:00Z"),
-                        Instant.parse("2026-07-13T15:00:00Z")
+                        SaleStatus.COMPLETED,
+                        LocalDateTime.of(2026, 7, 13, 0, 0),
+                        LocalDateTime.of(2026, 7, 14, 0, 0)
                 ))
-                .willReturn(List.of(first, second, cancelled));
+                .willReturn(List.of(first, second));
 
         var request = requestFactory.create(new ConsultingJobClaim(20L, STORE_ID, TARGET_DATE, 1));
 
@@ -101,13 +97,13 @@ class ConsultingRequestFactoryTest {
 
     private Product product(Long id, String name) {
         Product product = Product.create(STORE_ID, name, 4_000);
-        ReflectionTestUtils.setField(product, "id", id);
+        TestFieldSetter.setField(product, "id", id);
         return product;
     }
 
     private SaleTransaction transaction(
             String clientId,
-            Instant soldAt,
+            LocalDateTime soldAt,
             Product product,
             int quantity,
             long amount

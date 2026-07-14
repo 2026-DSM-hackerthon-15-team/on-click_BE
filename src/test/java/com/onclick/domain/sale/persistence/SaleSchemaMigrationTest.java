@@ -2,7 +2,9 @@ package com.onclick.domain.sale.persistence;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 import javax.sql.DataSource;
@@ -10,6 +12,7 @@ import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -131,6 +134,152 @@ class SaleSchemaMigrationTest {
         assertThat(tableCount(jdbc, "instagram_integrations")).isEqualTo(1);
     }
 
+    @Test
+    void migratesUtcInstantsToKstLocalDateTimesAndRemovesStoreTimeZone() {
+        DataSource dataSource = dataSource();
+        migrateTo(dataSource, "1");
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        seedLegacySales(jdbc);
+
+        migrateTo(dataSource, "5");
+
+        assertThat(columnCount(jdbc, "stores", "time_zone")).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT created_at FROM users WHERE id = 1",
+                LocalDateTime.class
+        )).isEqualTo(LocalDateTime.parse("2026-07-13T12:00:00"));
+        assertThat(jdbc.queryForObject(
+                "SELECT sold_at FROM sale_transactions WHERE client_transaction_id = 'POS-1'",
+                LocalDateTime.class
+        )).isEqualTo(LocalDateTime.parse("2026-07-13T13:00:00"));
+    }
+
+    @Test
+    void addsStoreIndustryAndRoadAddressWithSafeDefaultsAndIndustryConstraint() {
+        DataSource dataSource = dataSource();
+        migrateTo(dataSource, "1");
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        seedLegacySales(jdbc);
+
+        migrateTo(dataSource, "6");
+
+        assertThat(jdbc.queryForObject(
+                "SELECT industry FROM stores WHERE id = 10",
+                String.class
+        )).isEqualTo("OTHER");
+        assertThat(jdbc.queryForObject(
+                "SELECT road_address FROM stores WHERE id = 10",
+                String.class
+        )).isNull();
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE stores SET industry = 'INVALID' WHERE id = 10"
+        )).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void addsCompositeIndexesForEverySupportedSaleHistorySort() {
+        DataSource dataSource = dataSource();
+        migrateTo(dataSource, "7");
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        assertThat(indexColumns(jdbc, "idx_sale_transactions_store_sold_at"))
+                .containsExactly("store_id", "sold_at", "id");
+        assertThat(indexColumns(jdbc, "idx_sale_transactions_store_created_at_id"))
+                .containsExactly("store_id", "created_at", "id");
+        assertThat(indexColumns(jdbc, "idx_sale_transactions_store_status_id"))
+                .containsExactly("store_id", "status", "id");
+        assertThat(indexColumns(jdbc, "idx_sale_transactions_store_transaction_id"))
+                .containsExactly("store_id", "id");
+    }
+
+    @Test
+    void replacesInstagramOAuthTablesWithOneToOnePlaintextAccounts() {
+        DataSource dataSource = dataSource();
+        migrateTo(dataSource, "1");
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        seedLegacySales(jdbc);
+
+        migrateTo(dataSource, "8");
+
+        assertThat(tableCount(jdbc, "instagram_integrations")).isZero();
+        assertThat(tableCount(jdbc, "instagram_oauth_states")).isZero();
+        assertThat(tableCount(jdbc, "instagram_accounts")).isEqualTo(1);
+
+        LocalDateTime now = LocalDateTime.of(2026, 7, 14, 12, 0);
+        jdbc.update(
+                """
+                INSERT INTO instagram_accounts
+                    (store_id, account_id, password_plaintext, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                10L,
+                "instagram.owner",
+                " plain-password ",
+                now,
+                now
+        );
+        assertThat(jdbc.queryForObject(
+                "SELECT password_plaintext FROM instagram_accounts WHERE store_id = 10",
+                String.class
+        )).isEqualTo(" plain-password ");
+        assertThatThrownBy(() -> jdbc.update(
+                """
+                INSERT INTO instagram_accounts
+                    (store_id, account_id, password_plaintext, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                10L,
+                "duplicate",
+                "duplicate-password",
+                now,
+                now
+        )).isInstanceOf(DataIntegrityViolationException.class);
+
+        jdbc.update(
+                """
+                INSERT INTO users (id, account_id, password_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                2L,
+                "cascade-owner",
+                "password-hash",
+                now,
+                now
+        );
+        jdbc.update(
+                """
+                INSERT INTO stores
+                    (id, owner_user_id, name, industry, closing_time, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                11L,
+                2L,
+                "삭제 매장",
+                "OTHER",
+                LocalTime.of(22, 0),
+                now,
+                now
+        );
+        jdbc.update(
+                """
+                INSERT INTO instagram_accounts
+                    (store_id, account_id, password_plaintext, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                11L,
+                "delete.owner",
+                "delete-password",
+                now,
+                now
+        );
+
+        jdbc.update("DELETE FROM stores WHERE id = 11");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM instagram_accounts WHERE store_id = 11",
+                Integer.class
+        )).isZero();
+    }
+
     private void seedLegacySales(JdbcTemplate jdbc) {
         Instant createdAt = Instant.parse("2026-07-13T03:00:00Z");
         jdbc.update(
@@ -248,6 +397,33 @@ class SaleSchemaMigrationTest {
                 """,
                 Integer.class,
                 tableName
+        );
+    }
+
+    private int columnCount(JdbcTemplate jdbc, String tableName, String columnName) {
+        return jdbc.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE LOWER(table_name) = ?
+                  AND LOWER(column_name) = ?
+                """,
+                Integer.class,
+                tableName,
+                columnName
+        );
+    }
+
+    private List<String> indexColumns(JdbcTemplate jdbc, String indexName) {
+        return jdbc.queryForList(
+                """
+                SELECT LOWER(column_name)
+                FROM information_schema.index_columns
+                WHERE LOWER(index_name) = ?
+                ORDER BY ordinal_position
+                """,
+                String.class,
+                indexName
         );
     }
 

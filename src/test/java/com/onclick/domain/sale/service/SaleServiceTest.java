@@ -2,7 +2,8 @@ package com.onclick.domain.sale.service;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -11,6 +12,7 @@ import com.onclick.domain.product.entity.Product;
 import com.onclick.domain.product.repository.ProductRepository;
 import com.onclick.domain.sale.dto.SaleItemRequest;
 import com.onclick.domain.sale.dto.SaleTransactionCreateRequest;
+import com.onclick.domain.sale.dto.SaleTransactionPageResponse;
 import com.onclick.domain.sale.dto.SaleTransactionResponse;
 import com.onclick.domain.sale.entity.SaleStatus;
 import com.onclick.domain.sale.entity.SaleTransaction;
@@ -22,8 +24,13 @@ import com.onclick.global.error.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -38,8 +45,9 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class SaleServiceTest {
 
-    private static final Instant SOLD_AT = Instant.parse("2026-07-13T03:15:00Z");
-    private static final Instant NOW = Instant.parse("2026-07-13T04:00:00Z");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
+    private static final LocalDateTime SOLD_AT = LocalDateTime.parse("2026-07-13T12:15:00");
+    private static final LocalDateTime NOW = LocalDateTime.parse("2026-07-13T13:00:00");
 
     @Mock
     private SaleTransactionRepository saleTransactionRepository;
@@ -63,8 +71,9 @@ class SaleServiceTest {
         );
         saleService = new SaleService(
                 transactionExecutor,
+                saleTransactionRepository,
                 storeAccessValidator,
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(Instant.parse("2026-07-13T04:00:00Z"), BUSINESS_ZONE)
         );
     }
 
@@ -96,6 +105,160 @@ class SaleServiceTest {
         assertThat(result.transaction().items()).extracting("productPrice")
                 .containsExactly(4_500L, 5_000L);
         verify(storeAccessValidator).validate(jwt, 3L);
+    }
+
+    @Test
+    void returnsTheRequestedPageInStableDatabaseOrder() {
+        Product product = product(10L, 3L, "아메리카노", 4_500);
+        SaleTransaction first = transaction(
+                101L,
+                "POS-101",
+                LocalDateTime.parse("2026-07-13T12:00:00"),
+                product,
+                1,
+                4_500
+        );
+        SaleTransaction second = transaction(
+                102L,
+                "POS-102",
+                LocalDateTime.parse("2026-07-13T12:00:00"),
+                product,
+                2,
+                9_000
+        );
+        given(saleTransactionRepository.findPageIdsByStoreId(any(), any(Pageable.class)))
+                .willReturn(new PageImpl<>(
+                        List.of(102L, 101L),
+                        PageRequest.of(1, 2),
+                        5
+                ));
+        given(saleTransactionRepository.findAllWithItemsByStoreIdAndIdIn(
+                3L,
+                List.of(102L, 101L)
+        )).willReturn(List.of(first, second));
+
+        SaleTransactionPageResponse response = saleService.findTransactions(
+                jwt,
+                3L,
+                1,
+                2,
+                "soldAt",
+                "desc"
+        );
+
+        assertThat(response.content()).extracting(SaleTransactionResponse::saleId)
+                .containsExactly(102L, 101L);
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.size()).isEqualTo(2);
+        assertThat(response.totalElements()).isEqualTo(5);
+        assertThat(response.totalPages()).isEqualTo(3);
+        assertThat(response.hasNext()).isTrue();
+        assertThat(response.sortBy()).isEqualTo("soldAt");
+        assertThat(response.sortDirection()).isEqualTo("desc");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(saleTransactionRepository).findPageIdsByStoreId(
+                org.mockito.ArgumentMatchers.eq(3L),
+                pageableCaptor.capture()
+        );
+        assertThat(pageableCaptor.getValue().getSort())
+                .containsExactly(
+                        Sort.Order.desc("soldAt"),
+                        Sort.Order.desc("id")
+                );
+        verify(storeAccessValidator).validate(jwt, 3L);
+    }
+
+    @Test
+    void appliesWhitelistedAscendingSortAndRejectsInvalidPageQueries() {
+        given(saleTransactionRepository.findPageIdsByStoreId(any(), any(Pageable.class)))
+                .willReturn(new PageImpl<>(
+                        List.of(),
+                        PageRequest.of(0, 20),
+                        0
+                ));
+
+        SaleTransactionPageResponse response = saleService.findTransactions(
+                jwt,
+                3L,
+                0,
+                20,
+                "status",
+                "ASC"
+        );
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(saleTransactionRepository).findPageIdsByStoreId(
+                org.mockito.ArgumentMatchers.eq(3L),
+                pageableCaptor.capture()
+        );
+        assertThat(pageableCaptor.getValue().getSort())
+                .containsExactly(
+                        Sort.Order.asc("status"),
+                        Sort.Order.asc("id")
+                );
+        assertThat(response.sortBy()).isEqualTo("status");
+        assertThat(response.sortDirection()).isEqualTo("asc");
+
+        assertThatThrownBy(() -> saleService.findTransactions(
+                jwt,
+                3L,
+                0,
+                20,
+                "totalPaidAmount",
+                "desc"
+        ))
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).errorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThatThrownBy(() -> saleService.findTransactions(
+                jwt,
+                3L,
+                0,
+                101,
+                "soldAt",
+                "desc"
+        ))
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).errorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThatThrownBy(() -> saleService.findTransactions(
+                jwt,
+                3L,
+                0,
+                20,
+                "soldAt",
+                "newest"
+        ))
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).errorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    void skipsTheItemFetchForAnEmptyPage() {
+        given(saleTransactionRepository.findPageIdsByStoreId(any(), any(Pageable.class)))
+                .willReturn(new PageImpl<>(
+                        List.of(),
+                        PageRequest.of(2, 20),
+                        3
+                ));
+
+        SaleTransactionPageResponse response = saleService.findTransactions(
+                jwt,
+                3L,
+                2,
+                20,
+                "soldAt",
+                "desc"
+        );
+
+        assertThat(response.content()).isEmpty();
+        assertThat(response.totalElements()).isEqualTo(3);
+        assertThat(response.totalPages()).isEqualTo(1);
+        assertThat(response.hasNext()).isFalse();
+        verify(saleTransactionRepository, never())
+                .findAllWithItemsByStoreIdAndIdIn(any(), any());
     }
 
     @Test
@@ -139,12 +302,12 @@ class SaleServiceTest {
 
     @Test
     void treatsNanosecondDifferencesBeyondPostgresPrecisionAsTheSamePayload() {
-        Instant nanosecondSoldAt = Instant.parse("2026-07-13T03:15:00.123456789Z");
+        LocalDateTime nanosecondSoldAt = LocalDateTime.parse("2026-07-13T12:15:00.123456789");
         Product product = product(10L, 3L, "아메리카노", 4_500);
         SaleTransaction existing = SaleTransaction.create(
                 3L,
                 "POS-NANO",
-                Instant.parse("2026-07-13T03:15:00.123456Z")
+                LocalDateTime.parse("2026-07-13T12:15:00.123456")
         );
         existing.addItem(1, product, 1, 4_500);
         persisted(existing, 78L);
@@ -163,7 +326,7 @@ class SaleServiceTest {
 
         assertThat(result.created()).isFalse();
         assertThat(result.transaction().soldAt())
-                .isEqualTo(Instant.parse("2026-07-13T03:15:00.123456Z"));
+                .isEqualTo(LocalDateTime.parse("2026-07-13T12:15:00.123456"));
         verify(saleTransactionRepository, never()).saveAndFlush(any());
     }
 
@@ -349,6 +512,19 @@ class SaleServiceTest {
             long paidAmount
     ) {
         SaleTransaction transaction = SaleTransaction.create(3L, clientTransactionId, SOLD_AT);
+        transaction.addItem(1, product, quantity, paidAmount);
+        return persisted(transaction, id);
+    }
+
+    private SaleTransaction transaction(
+            Long id,
+            String clientTransactionId,
+            LocalDateTime soldAt,
+            Product product,
+            int quantity,
+            long paidAmount
+    ) {
+        SaleTransaction transaction = SaleTransaction.create(3L, clientTransactionId, soldAt);
         transaction.addItem(1, product, quantity, paidAmount);
         return persisted(transaction, id);
     }

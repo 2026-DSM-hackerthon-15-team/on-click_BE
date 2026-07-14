@@ -1,8 +1,8 @@
 package com.onclick.domain.consulting.entity;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
@@ -17,6 +17,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(
@@ -36,6 +39,8 @@ import jakarta.persistence.UniqueConstraint;
                 )
         }
 )
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Consulting {
 
     private static final int MAX_ERROR_LENGTH = 1000;
@@ -64,24 +69,21 @@ public class Consulting {
     private int attemptCount;
 
     @Column(name = "next_retry_at")
-    private Instant nextRetryAt;
+    private LocalDateTime nextRetryAt;
 
     @Column(name = "last_error", length = MAX_ERROR_LENGTH)
     private String lastError;
 
     @Column(name = "generated_at")
-    private Instant generatedAt;
+    private LocalDateTime generatedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
 
-    protected Consulting() {
-    }
-
-    private Consulting(Long storeId, LocalDate targetDate, Instant now) {
+    private Consulting(Long storeId, LocalDate targetDate, LocalDateTime now) {
         this.storeId = Objects.requireNonNull(storeId, "storeId must not be null");
         this.targetDate = Objects.requireNonNull(targetDate, "targetDate must not be null");
         this.status = ConsultingStatus.PENDING;
@@ -91,11 +93,11 @@ public class Consulting {
         this.updatedAt = now;
     }
 
-    public static Consulting pending(Long storeId, LocalDate targetDate, Instant now) {
+    public static Consulting pending(Long storeId, LocalDate targetDate, LocalDateTime now) {
         return new Consulting(storeId, targetDate, now);
     }
 
-    public boolean claim(Instant now, Duration leaseDuration, int maxAttempts) {
+    public boolean claim(LocalDateTime now, Duration leaseDuration, int maxAttempts) {
         Objects.requireNonNull(now, "now must not be null");
         Objects.requireNonNull(leaseDuration, "leaseDuration must not be null");
         if (status == ConsultingStatus.COMPLETED
@@ -111,14 +113,14 @@ public class Consulting {
         return true;
     }
 
-    public boolean complete(ConsultingGenerationResult result, Instant now, int expectedAttempt) {
+    public boolean complete(ConsultingGenerationResult result, LocalDateTime now, int expectedAttempt) {
         if (status != ConsultingStatus.PENDING || attemptCount != expectedAttempt) {
             return false;
         }
         Objects.requireNonNull(result, "result must not be null");
         this.title = requireText(result.title(), "title");
         this.content = requireText(result.content(), "content");
-        this.generatedAt = Objects.requireNonNull(result.generatedAt(), "generatedAt must not be null");
+        this.generatedAt = Objects.requireNonNull(now, "now must not be null");
         this.status = ConsultingStatus.COMPLETED;
         this.nextRetryAt = null;
         this.lastError = null;
@@ -128,15 +130,17 @@ public class Consulting {
 
     public boolean fail(
             String reason,
-            Instant now,
-            Instant retryAt,
+            LocalDateTime now,
+            LocalDateTime retryAt,
             int maxAttempts,
             int expectedAttempt
     ) {
         if (status != ConsultingStatus.PENDING || attemptCount != expectedAttempt) {
             return false;
         }
-        this.status = ConsultingStatus.FAILED;
+        this.status = attemptCount < maxAttempts
+                ? ConsultingStatus.PENDING
+                : ConsultingStatus.FAILED;
         this.lastError = truncate(reason);
         this.nextRetryAt = attemptCount < maxAttempts ? retryAt : null;
         this.updatedAt = Objects.requireNonNull(now, "now must not be null");
@@ -157,51 +161,4 @@ public class Consulting {
         return message.substring(0, Math.min(message.length(), MAX_ERROR_LENGTH));
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Long getStoreId() {
-        return storeId;
-    }
-
-    public LocalDate getTargetDate() {
-        return targetDate;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public ConsultingStatus getStatus() {
-        return status;
-    }
-
-    public int getAttemptCount() {
-        return attemptCount;
-    }
-
-    public Instant getNextRetryAt() {
-        return nextRetryAt;
-    }
-
-    public String getLastError() {
-        return lastError;
-    }
-
-    public Instant getGeneratedAt() {
-        return generatedAt;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
 }

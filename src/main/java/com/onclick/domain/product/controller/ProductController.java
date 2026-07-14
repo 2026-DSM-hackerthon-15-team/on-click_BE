@@ -9,6 +9,7 @@ import com.onclick.domain.product.dto.ProductUpdateRequest;
 import com.onclick.domain.product.service.ProductService;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -24,13 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/stores/{storeId}/products")
+@RequiredArgsConstructor
 public class ProductController {
 
     private final ProductService productService;
-
-    public ProductController(ProductService productService) {
-        this.productService = productService;
-    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

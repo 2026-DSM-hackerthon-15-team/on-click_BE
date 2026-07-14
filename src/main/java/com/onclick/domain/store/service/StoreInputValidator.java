@@ -1,9 +1,8 @@
 package com.onclick.domain.store.service;
 
-import java.time.DateTimeException;
 import java.time.LocalTime;
-import java.time.ZoneId;
 
+import com.onclick.domain.store.entity.Industry;
 import com.onclick.domain.store.entity.Store;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
@@ -20,22 +19,22 @@ public class StoreInputValidator {
         return name.trim();
     }
 
-    public String normalizeTimeZone(String timeZone) {
-        return requireTimeZone(timeZone == null || timeZone.isBlank() ? Store.DEFAULT_TIME_ZONE : timeZone);
-    }
-
-    public String requireTimeZone(String timeZone) {
-        if (timeZone == null || timeZone.isBlank()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "지점 시간대는 비어 있을 수 없습니다.");
-        }
-        try {
-            return ZoneId.of(timeZone.trim()).getId();
-        } catch (DateTimeException exception) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 지점 시간대입니다.");
-        }
-    }
-
     public LocalTime normalizeClosingTime(LocalTime closingTime) {
         return closingTime == null ? Store.DEFAULT_CLOSING_TIME : closingTime;
+    }
+
+    public Industry normalizeIndustry(Industry industry) {
+        return industry == null ? Store.DEFAULT_INDUSTRY : industry;
+    }
+
+    public String normalizeRoadAddress(String roadAddress) {
+        return roadAddress == null ? null : requireRoadAddress(roadAddress);
+    }
+
+    public String requireRoadAddress(String roadAddress) {
+        if (roadAddress == null || roadAddress.isBlank()) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "매장 주소는 비어 있을 수 없습니다.");
+        }
+        return roadAddress.trim();
     }
 }

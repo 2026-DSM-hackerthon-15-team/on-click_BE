@@ -30,7 +30,7 @@ class AccountStoreApiIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void managesProfilePasswordAndStoreClosingTimes() throws Exception {
+    void managesProfilePasswordAndStoreDetails() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         String accountId = "profile-" + suffix;
         String updatedAccountId = "updated-" + suffix;
@@ -47,13 +47,16 @@ class AccountStoreApiIntegrationTest {
                                   "name": "프로필 사용자",
                                   "email": "%s",
                                   "storeName": "첫 매장",
-                                  "timeZone": "Asia/Seoul",
+                                  "industry": "CAFE",
+                                  "roadAddress": " 서울특별시 강남구 테헤란로 1 ",
                                   "closingTime": "21:15"
                                 }
                                 """.formatted(accountId, password, email)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("프로필 사용자"))
                 .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.industry").value("CAFE"))
+                .andExpect(jsonPath("$.roadAddress").value("서울특별시 강남구 테헤란로 1"))
                 .andExpect(jsonPath("$.closingTime").value("21:15"))
                 .andReturn();
         long userId = body(signUpResult).required("userId").asLong();
@@ -84,6 +87,8 @@ class AccountStoreApiIntegrationTest {
 
         mockMvc.perform(get("/stores").header("Authorization", authorization))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].industry").value("CAFE"))
+                .andExpect(jsonPath("$[0].roadAddress").value("서울특별시 강남구 테헤란로 1"))
                 .andExpect(jsonPath("$[0].closingTime").value("21:15"));
 
         MvcResult storeResult = mockMvc.perform(post("/stores")
@@ -91,11 +96,11 @@ class AccountStoreApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "name": "두 번째 매장",
-                                  "timeZone": "Asia/Seoul"
+                                  "name": "두 번째 매장"
                                 }
                                 """))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.industry").value("OTHER"))
                 .andExpect(jsonPath("$.closingTime").value("22:00"))
                 .andReturn();
         long storeId = body(storeResult).required("id").asLong();
@@ -105,11 +110,42 @@ class AccountStoreApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "industry": "RETAIL",
+                                  "roadAddress": " 부산광역시 해운대구 센텀로 2 ",
                                   "closingTime": "23:45"
                                 }
                                 """))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.industry").value("RETAIL"))
+                .andExpect(jsonPath("$.roadAddress").value("부산광역시 해운대구 센텀로 2"))
                 .andExpect(jsonPath("$.closingTime").value("23:45"));
+
+        mockMvc.perform(get("/stores").header("Authorization", authorization))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[1].industry").value("RETAIL"))
+                .andExpect(jsonPath("$[1].roadAddress").value("부산광역시 해운대구 센텀로 2"));
+
+        mockMvc.perform(patch("/stores/{storeId}", storeId)
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "industry": "WHOLESALE"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+
+        mockMvc.perform(patch("/stores/{storeId}", storeId)
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "roadAddress": "   "
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
 
         mockMvc.perform(patch("/stores/{storeId}", storeId)
                         .header("Authorization", authorization)

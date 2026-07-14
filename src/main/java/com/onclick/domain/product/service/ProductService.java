@@ -12,23 +12,17 @@ import com.onclick.domain.store.service.StoreAccessValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class ProductService {
 
     private final ProductRepository productRepository;
     private final StoreAccessValidator storeAccessValidator;
-
-    public ProductService(
-            ProductRepository productRepository,
-            StoreAccessValidator storeAccessValidator
-    ) {
-        this.productRepository = productRepository;
-        this.storeAccessValidator = storeAccessValidator;
-    }
 
     @Transactional
     public ProductResponse create(Jwt jwt, Long storeId, ProductCreateRequest request) {

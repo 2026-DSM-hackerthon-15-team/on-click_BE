@@ -9,10 +9,6 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
-    properties:
-      hibernate:
-        jdbc:
-          time_zone: UTC
   flyway:
     enabled: true
   servlet:
@@ -68,20 +64,3 @@ app:
     batch-size: ${CONSULTING_BATCH_SIZE:100}
     retry-delay: ${CONSULTING_RETRY_DELAY:PT5M}
     lease-duration: ${CONSULTING_LEASE_DURATION:PT2M}
-  instagram:
-    provider: ${INSTAGRAM_PROVIDER:mock}
-    client-id: ${INSTAGRAM_CLIENT_ID:mock-client-id}
-    client-secret: ${INSTAGRAM_CLIENT_SECRET:mock-client-secret}
-    oauth-callback-url: ${INSTAGRAM_OAUTH_CALLBACK_URL:http://localhost:8080/integrations/instagram/callback}
-    frontend-redirect-url: ${INSTAGRAM_FRONTEND_REDIRECT_URL:http://localhost:5173/settings/integrations/instagram}
-    authorize-url: ${INSTAGRAM_AUTHORIZE_URL:https://www.instagram.com/oauth/authorize}
-    token-url: ${INSTAGRAM_TOKEN_URL:https://api.instagram.com/oauth/access_token}
-    graph-base-url: ${INSTAGRAM_GRAPH_BASE_URL:https://graph.instagram.com/v22.0}
-    scopes: ${INSTAGRAM_SCOPES:instagram_business_basic,instagram_business_content_publish}
-    token-encryption-key: ${INSTAGRAM_TOKEN_ENCRYPTION_KEY:}
-    state-ttl: ${INSTAGRAM_STATE_TTL:PT10M}
-    connect-timeout: ${INSTAGRAM_CONNECT_TIMEOUT:PT3S}
-    read-timeout: ${INSTAGRAM_READ_TIMEOUT:PT15S}
-    refresh-cron: ${INSTAGRAM_REFRESH_CRON:0 0 3 * * *}
-    state-cleanup-cron: ${INSTAGRAM_STATE_CLEANUP_CRON:0 30 3 * * *}
-    publish-recovery-interval: ${INSTAGRAM_PUBLISH_RECOVERY_INTERVAL:PT1M}

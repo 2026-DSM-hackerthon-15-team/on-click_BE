@@ -1,8 +1,8 @@
 package com.onclick.domain.consulting.service;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,30 +10,39 @@ import com.onclick.common.ai.dto.ConsultingGenerationResult;
 import com.onclick.domain.consulting.entity.Consulting;
 import com.onclick.domain.consulting.repository.ConsultingRepository;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class ConsultingJobManager {
 
     private final ConsultingRepository consultingRepository;
 
-    public ConsultingJobManager(ConsultingRepository consultingRepository) {
-        this.consultingRepository = consultingRepository;
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void createPending(Long storeId, LocalDate targetDate, Instant now) {
-        if (consultingRepository.existsByStoreIdAndTargetDate(storeId, targetDate)) {
-            return;
+    public ConsultingJobRegistration createPending(
+            Long storeId,
+            LocalDate targetDate,
+            LocalDateTime now
+    ) {
+        Optional<Consulting> existing = consultingRepository.findByStoreIdAndTargetDate(
+                storeId,
+                targetDate
+        );
+        if (existing.isPresent()) {
+            return new ConsultingJobRegistration(existing.orElseThrow().getId(), false);
         }
-        consultingRepository.saveAndFlush(Consulting.pending(storeId, targetDate, now));
+        Consulting created = consultingRepository.saveAndFlush(
+                Consulting.pending(storeId, targetDate, now)
+        );
+        return new ConsultingJobRegistration(created.getId(), true);
     }
 
     @Transactional(readOnly = true)
-    public List<Long> findRetryableIds(Instant now, int maxAttempts, int batchSize) {
+    public List<Long> findRetryableIds(LocalDateTime now, int maxAttempts, int batchSize) {
         return consultingRepository.findRetryableIds(
                 now,
                 maxAttempts,
@@ -44,7 +53,7 @@ public class ConsultingJobManager {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<ConsultingJobClaim> claim(
             Long consultingId,
-            Instant now,
+            LocalDateTime now,
             Duration leaseDuration,
             int maxAttempts
     ) {
@@ -61,7 +70,11 @@ public class ConsultingJobManager {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void complete(ConsultingJobClaim job, ConsultingGenerationResult result, Instant now) {
+    public void complete(
+            ConsultingJobClaim job,
+            ConsultingGenerationResult result,
+            LocalDateTime now
+    ) {
         consultingRepository.findByIdForUpdate(job.consultingId())
                 .ifPresent(consulting -> consulting.complete(result, now, job.attempt()));
     }
@@ -70,7 +83,7 @@ public class ConsultingJobManager {
     public void fail(
             ConsultingJobClaim job,
             String reason,
-            Instant now,
+            LocalDateTime now,
             Duration retryDelay,
             int maxAttempts
     ) {

@@ -8,7 +8,6 @@ public record ConsultingGenerationRequest(
         Long storeId,
         String storeName,
         LocalDate targetDate,
-        String timeZone,
         long totalSalesAmount,
         long orderCount,
         long totalVisitors,

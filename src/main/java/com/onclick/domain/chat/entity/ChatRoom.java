@@ -1,6 +1,6 @@
 package com.onclick.domain.chat.entity;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -9,16 +9,23 @@ import java.util.Objects;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "chat_rooms",
         indexes = @Index(
@@ -26,6 +33,8 @@ import jakarta.persistence.Table;
                 columnList = "store_id,updated_at"
         )
 )
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatRoom {
 
     @Id
@@ -39,16 +48,16 @@ public class ChatRoom {
     private String title;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    @CreatedDate
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Getter(AccessLevel.NONE)
     private List<ChatMessage> messages = new ArrayList<>();
-
-    protected ChatRoom() {
-    }
 
     private ChatRoom(Long storeId, String title) {
         this.storeId = Objects.requireNonNull(storeId, "storeId must not be null");
@@ -59,42 +68,8 @@ public class ChatRoom {
         return new ChatRoom(storeId, title);
     }
 
-    public void touch(Instant now) {
+    public void touch(LocalDateTime now) {
         this.updatedAt = Objects.requireNonNull(now, "now must not be null");
-    }
-
-    @PrePersist
-    void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-    }
-
-    @PreUpdate
-    void onUpdate() {
-        if (updatedAt == null) {
-            updatedAt = Instant.now();
-        }
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getStoreId() {
-        return storeId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
     }
 
     public List<ChatMessage> getMessages() {

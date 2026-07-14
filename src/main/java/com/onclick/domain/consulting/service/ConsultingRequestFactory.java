@@ -1,6 +1,6 @@
 package com.onclick.domain.consulting.service;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -20,11 +20,11 @@ import com.onclick.domain.store.repository.StoreRepository;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Component
-@Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class ConsultingRequestFactory {
 
     private static final int HOURS_PER_DAY = 24;
@@ -32,28 +32,18 @@ public class ConsultingRequestFactory {
     private final StoreRepository storeRepository;
     private final SaleTransactionRepository saleTransactionRepository;
 
-    public ConsultingRequestFactory(
-            StoreRepository storeRepository,
-            SaleTransactionRepository saleTransactionRepository
-    ) {
-        this.storeRepository = storeRepository;
-        this.saleTransactionRepository = saleTransactionRepository;
-    }
-
     public ConsultingGenerationRequest create(ConsultingJobClaim job) {
         Store store = storeRepository.findById(job.storeId())
                 .orElseThrow(() -> new ApiException(ErrorCode.STORE_NOT_FOUND));
-        Instant from = job.targetDate().atStartOfDay(store.zoneId()).toInstant();
-        Instant to = job.targetDate().plusDays(1).atStartOfDay(store.zoneId()).toInstant();
+        LocalDateTime from = job.targetDate().atStartOfDay();
+        LocalDateTime to = job.targetDate().plusDays(1).atStartOfDay();
         List<SaleTransaction> transactions = saleTransactionRepository
-                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
+                .findAllByStoreIdAndStatusAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
                         store.getId(),
+                        SaleStatus.COMPLETED,
                         from,
                         to
-                )
-                .stream()
-                .filter(transaction -> transaction.getStatus() == SaleStatus.COMPLETED)
-                .toList();
+                );
 
         long totalSales = 0;
         long totalQuantity = 0;
@@ -66,7 +56,7 @@ public class ConsultingRequestFactory {
             totalSales = Math.addExact(totalSales, transactionSales);
             totalQuantity = Math.addExact(totalQuantity, transaction.totalQuantity());
 
-            int hour = transaction.getSoldAt().atZone(store.zoneId()).getHour();
+            int hour = transaction.getSoldAt().getHour();
             hourlySales[hour] = Math.addExact(hourlySales[hour], transactionSales);
             hourlyOrders[hour] = Math.addExact(hourlyOrders[hour], 1L);
 
@@ -101,7 +91,6 @@ public class ConsultingRequestFactory {
                 store.getId(),
                 store.getName(),
                 job.targetDate(),
-                store.getTimeZone(),
                 totalSales,
                 transactions.size(),
                 transactions.size(),

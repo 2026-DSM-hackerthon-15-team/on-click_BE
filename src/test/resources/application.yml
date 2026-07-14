@@ -24,17 +24,3 @@ app:
     public-base-url: http://localhost:8080
     max-file-size-bytes: 10485760
     orphan-retention: PT24H
-  instagram:
-    provider: mock
-    client-id: mock-client-id
-    client-secret: mock-client-secret
-    oauth-callback-url: http://localhost:8080/integrations/instagram/callback
-    frontend-redirect-url: http://localhost:5173/settings/integrations/instagram
-    authorize-url: https://www.instagram.com/oauth/authorize
-    token-url: https://api.instagram.com/oauth/access_token
-    graph-base-url: https://graph.instagram.com/v22.0
-    scopes: instagram_business_basic,instagram_business_content_publish
-    token-encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
-    state-ttl: PT10M
-    connect-timeout: PT3S
-    read-timeout: PT15S

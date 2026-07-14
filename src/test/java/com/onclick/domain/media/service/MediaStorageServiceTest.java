@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Optional;
@@ -66,7 +67,7 @@ class MediaStorageServiceTest {
         given(repository.save(any(MediaFile.class))).willAnswer(invocation -> {
             MediaFile media = invocation.getArgument(0);
             ReflectionTestUtils.setField(media, "id", 7L);
-            ReflectionTestUtils.setField(media, "createdAt", Instant.parse("2026-07-14T00:00:00Z"));
+            ReflectionTestUtils.setField(media, "createdAt", LocalDateTime.of(2026, 7, 14, 9, 0));
             return media;
         });
         MockMultipartFile file = new MockMultipartFile(
@@ -115,7 +116,7 @@ class MediaStorageServiceTest {
         given(repository.save(any(MediaFile.class))).willAnswer(invocation -> {
             MediaFile media = invocation.getArgument(0);
             ReflectionTestUtils.setField(media, "id", 7L);
-            ReflectionTestUtils.setField(media, "createdAt", Instant.parse("2026-07-14T00:00:00Z"));
+            ReflectionTestUtils.setField(media, "createdAt", LocalDateTime.of(2026, 7, 14, 9, 0));
             return media;
         });
         TransactionSynchronizationManager.initSynchronization();

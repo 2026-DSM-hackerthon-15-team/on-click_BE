@@ -6,7 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Clock;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -16,6 +16,7 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 
+import com.onclick.common.time.KoreanTime;
 import com.onclick.domain.media.dto.MediaUploadResponse;
 import com.onclick.domain.media.entity.MediaFile;
 import com.onclick.domain.media.repository.MediaFileRepository;
@@ -148,7 +149,8 @@ public class MediaStorageService {
     @Scheduled(fixedDelayString = "${app.media.cleanup-interval:PT1H}")
     @Transactional
     public void deleteExpiredOrphans() {
-        Instant cutoff = clock.instant().minus(properties.orphanRetention());
+        LocalDateTime cutoff = KoreanTime.now(clock)
+                .minus(properties.orphanRetention());
         for (MediaFile mediaFile : mediaFileRepository.findOrphansCreatedBefore(cutoff)) {
             mediaFileRepository.delete(mediaFile);
             deleteAfterCommit(resolveStoragePath(mediaFile.getStorageName()));
@@ -279,7 +281,7 @@ public class MediaStorageService {
         });
     }
 
-    private void deleteUntrackedPhysicalFiles(Instant cutoff) {
+    private void deleteUntrackedPhysicalFiles(LocalDateTime cutoff) {
         Set<String> tracked = new HashSet<>(mediaFileRepository.findAllStorageNames());
         try (var paths = Files.list(storageRoot)) {
             paths.filter(Files::isRegularFile)
@@ -291,9 +293,12 @@ public class MediaStorageService {
         }
     }
 
-    private boolean isOlderThan(Path path, Instant cutoff) {
+    private boolean isOlderThan(Path path, LocalDateTime cutoff) {
         try {
-            return Files.getLastModifiedTime(path).toInstant().isBefore(cutoff);
+            LocalDateTime lastModifiedAt = KoreanTime.fromInstant(
+                    Files.getLastModifiedTime(path).toInstant()
+            );
+            return lastModifiedAt.isBefore(cutoff);
         } catch (IOException ignored) {
             return false;
         }

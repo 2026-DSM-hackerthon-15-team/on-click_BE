@@ -1,19 +1,28 @@
 package com.onclick.domain.media.entity;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "media_files")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MediaFile {
 
     @Id
@@ -39,10 +48,8 @@ public class MediaFile {
     private long sizeBytes;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    protected MediaFile() {
-    }
+    @CreatedDate
+    private LocalDateTime createdAt;
 
     public MediaFile(Long storeId, String originalName, String storageName, String contentType, long sizeBytes) {
         this.storeId = Objects.requireNonNull(storeId, "storeId must not be null");
@@ -53,42 +60,4 @@ public class MediaFile {
         this.sizeBytes = sizeBytes;
     }
 
-    @PrePersist
-    void prePersist() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getStoreId() {
-        return storeId;
-    }
-
-    public String getPublicId() {
-        return publicId;
-    }
-
-    public String getOriginalName() {
-        return originalName;
-    }
-
-    public String getStorageName() {
-        return storageName;
-    }
-
-    public String getContentType() {
-        return contentType;
-    }
-
-    public long getSizeBytes() {
-        return sizeBytes;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
 }

@@ -1,10 +1,17 @@
 package com.onclick.global.error;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import static org.springframework.http.HttpMethod.GET;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,6 +39,47 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode().value()).isEqualTo(400);
         assertThat(response.getBody()).isEqualTo(new ApiErrorResponse(
                 "INVALID_DATE", "날짜 형식이 올바르지 않습니다."));
+    }
+
+    @Test
+    void mapsAuthenticationFailureToUnauthorized() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleAuthenticationException(
+                new BadCredentialsException("sensitive authentication detail"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(401);
+        assertThat(response.getBody()).isEqualTo(new ApiErrorResponse(
+                "UNAUTHORIZED", "인증이 필요합니다."));
+    }
+
+    @Test
+    void mapsAccessDenialToForbidden() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleAccessDeniedException(
+                new AccessDeniedException("sensitive authorization detail"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(403);
+        assertThat(response.getBody()).isEqualTo(new ApiErrorResponse(
+                "FORBIDDEN", "접근 권한이 없습니다."));
+    }
+
+    @Test
+    void mapsUnknownResourceToNotFound() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleNotFound(
+                new NoResourceFoundException(GET, "/missing"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+        assertThat(response.getBody()).isEqualTo(new ApiErrorResponse(
+                "NOT_FOUND", "요청한 리소스를 찾을 수 없습니다."));
+    }
+
+    @Test
+    void mapsUnsupportedMethodAndPreservesAllowHeader() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleMethodNotAllowed(
+                new HttpRequestMethodNotSupportedException("GET", List.of("POST")));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(405);
+        assertThat(response.getHeaders().getAllow()).containsExactly(org.springframework.http.HttpMethod.POST);
+        assertThat(response.getBody()).isEqualTo(new ApiErrorResponse(
+                "METHOD_NOT_ALLOWED", "지원하지 않는 HTTP 메서드입니다."));
     }
 
     @Test

@@ -1,6 +1,6 @@
 package com.onclick.domain.marketing.repository;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +31,6 @@ public interface MarketingContentRepository extends JpaRepository<MarketingConte
     @EntityGraph(attributePaths = "mediaFiles")
     List<MarketingContent> findAllByStatusInAndNextPublishAtLessThanEqual(
             Collection<MarketingStatus> statuses,
-            Instant nextPublishAt
+            LocalDateTime nextPublishAt
     );
 }

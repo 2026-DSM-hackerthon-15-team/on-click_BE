@@ -1,20 +1,16 @@
 package com.onclick.domain.chat.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
+@Slf4j
 class ChatMessageDispatcher {
 
-    private static final Logger log = LoggerFactory.getLogger(ChatMessageDispatcher.class);
-
     private final ChatMessageProcessor processor;
-
-    ChatMessageDispatcher(ChatMessageProcessor processor) {
-        this.processor = processor;
-    }
 
     @Async
     public void dispatch(Long assistantMessageId) {

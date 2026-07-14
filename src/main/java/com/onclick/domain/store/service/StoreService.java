@@ -13,11 +13,13 @@ import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 import com.onclick.global.security.JwtUserIdResolver;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class StoreService {
 
     private final UserRepository userRepository;
@@ -25,20 +27,6 @@ public class StoreService {
     private final StoreAccessValidator storeAccessValidator;
     private final StoreInputValidator storeInputValidator;
     private final JwtUserIdResolver userIdResolver;
-
-    public StoreService(
-            UserRepository userRepository,
-            StoreRepository storeRepository,
-            StoreAccessValidator storeAccessValidator,
-            StoreInputValidator storeInputValidator,
-            JwtUserIdResolver userIdResolver
-    ) {
-        this.userRepository = userRepository;
-        this.storeRepository = storeRepository;
-        this.storeAccessValidator = storeAccessValidator;
-        this.storeInputValidator = storeInputValidator;
-        this.userIdResolver = userIdResolver;
-    }
 
     @Transactional(readOnly = true)
     public List<StoreResponse> getStores(Jwt jwt) {
@@ -56,7 +44,8 @@ public class StoreService {
         Store store = storeRepository.save(new Store(
                 user,
                 storeInputValidator.requireName(request.name()),
-                storeInputValidator.normalizeTimeZone(request.timeZone()),
+                storeInputValidator.normalizeIndustry(request.industry()),
+                storeInputValidator.normalizeRoadAddress(request.roadAddress()),
                 storeInputValidator.normalizeClosingTime(request.closingTime())
         ));
         return StoreResponse.from(store);
@@ -64,16 +53,19 @@ public class StoreService {
 
     @Transactional
     public StoreResponse updateStore(Jwt jwt, Long storeId, UpdateStoreRequest request) {
-        if (request.name() == null && request.timeZone() == null && request.closingTime() == null) {
+        if (request.name() == null
+                && request.industry() == null
+                && request.roadAddress() == null
+                && request.closingTime() == null) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "수정할 지점 정보를 입력해 주세요.");
         }
 
         Store store = storeAccessValidator.validate(jwt, storeId);
         String name = request.name() == null ? null : storeInputValidator.requireName(request.name());
-        String timeZone = request.timeZone() == null
+        String roadAddress = request.roadAddress() == null
                 ? null
-                : storeInputValidator.requireTimeZone(request.timeZone());
-        store.update(name, timeZone, request.closingTime());
+                : storeInputValidator.requireRoadAddress(request.roadAddress());
+        store.update(name, request.industry(), roadAddress, request.closingTime());
         return StoreResponse.from(store);
     }
 }

@@ -1,7 +1,7 @@
 package com.onclick.domain.dashboard.dto;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public record ClosingSalesForecastResponse(
         Long storeId,
@@ -9,6 +9,6 @@ public record ClosingSalesForecastResponse(
         String currency,
         long observedSalesAmount,
         long forecastClosingSalesAmount,
-        Instant generatedAt
+        LocalDateTime generatedAt
 ) {
 }

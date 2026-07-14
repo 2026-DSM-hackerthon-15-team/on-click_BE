@@ -2,47 +2,39 @@ package com.onclick.domain.chat.service;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import com.onclick.common.time.KoreanTime;
 import com.onclick.domain.chat.config.ChatProcessingProperties;
 import com.onclick.domain.chat.entity.ChatMessage;
 import com.onclick.domain.chat.entity.ChatMessageRole;
 import com.onclick.domain.chat.entity.ChatMessageStatus;
 import com.onclick.domain.chat.generation.ChatGenerationRequest;
-import com.onclick.domain.chat.generation.ChatHistoryItem;
 import com.onclick.domain.chat.repository.ChatMessageRepository;
+import com.onclick.domain.store.entity.Store;
+import com.onclick.domain.store.repository.StoreRepository;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 class ChatMessageWorkService {
 
-    static final int HISTORY_LIMIT = 20;
     static final String FAILED_MESSAGE = "답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
     private final ChatMessageRepository chatMessageRepository;
+    private final StoreRepository storeRepository;
     private final ChatProcessingProperties properties;
     private final Clock clock;
 
-    ChatMessageWorkService(
-            ChatMessageRepository chatMessageRepository,
-            ChatProcessingProperties properties,
-            Clock clock
-    ) {
-        this.chatMessageRepository = chatMessageRepository;
-        this.properties = properties;
-        this.clock = clock;
-    }
-
     @Transactional
     public Optional<ChatGenerationWork> claim(Long assistantMessageId) {
-        Instant now = Instant.now(clock);
+        LocalDateTime now = now();
         int claimed = chatMessageRepository.claimPending(
                 assistantMessageId,
                 now,
@@ -61,27 +53,17 @@ class ChatMessageWorkService {
                 .filter(message -> message.getStatus() == ChatMessageStatus.COMPLETED)
                 .orElseThrow(() -> new IllegalStateException("Chat request message is invalid"));
 
-        List<ChatMessage> recentHistory = new ArrayList<>(
-                chatMessageRepository.findRecentCompletedHistory(
-                        chatRoomId,
-                        userMessage.getId(),
-                        PageRequest.of(0, HISTORY_LIMIT)
-                )
-        );
-        Collections.reverse(recentHistory);
-        List<ChatHistoryItem> history = recentHistory.stream()
-                .map(message -> new ChatHistoryItem(message.getRole(), message.getContent()))
-                .toList();
+        Store store = storeRepository.findById(assistantMessage.getChatRoom().getStoreId())
+                .orElseThrow(() -> new IllegalStateException("Chat room store no longer exists"));
 
         return Optional.of(new ChatGenerationWork(
                 assistantMessage.getId(),
                 assistantMessage.getRetryCount(),
                 new ChatGenerationRequest(
-                        assistantMessage.getChatRoom().getStoreId(),
+                        store.getOwnerUserId(),
+                        store.getId(),
                         chatRoomId,
-                        userMessage.getId(),
-                        userMessage.getContent(),
-                        history
+                        userMessage.getContent()
                 )
         ));
     }
@@ -92,19 +74,19 @@ class ChatMessageWorkService {
                 work.assistantMessageId(),
                 work.attempt(),
                 content,
-                Instant.now(clock)
+                now()
         );
     }
 
     @Transactional
     public void fail(ChatGenerationWork work) {
-        Instant now = Instant.now(clock);
+        LocalDateTime now = now();
         boolean exhausted = work.attempt() >= properties.safeMaxAttempts();
         ChatMessageStatus status = exhausted
                 ? ChatMessageStatus.FAILED
                 : ChatMessageStatus.PENDING;
         String content = exhausted ? FAILED_MESSAGE : "";
-        Instant nextRetryAt = exhausted
+        LocalDateTime nextRetryAt = exhausted
                 ? null
                 : now.plus(retryDelayForAttempt(work.attempt()));
         chatMessageRepository.recordFailure(
@@ -122,7 +104,7 @@ class ChatMessageWorkService {
         return chatMessageRepository.findEligibleMessageIds(
                 ChatMessageRole.ASSISTANT,
                 ChatMessageStatus.PENDING,
-                Instant.now(clock),
+                now(),
                 PageRequest.of(0, properties.safeRecoveryBatchSize())
         );
     }
@@ -133,5 +115,9 @@ class ChatMessageWorkService {
         } catch (ArithmeticException exception) {
             return properties.safeRetryDelay();
         }
+    }
+
+    private LocalDateTime now() {
+        return KoreanTime.now(clock);
     }
 }

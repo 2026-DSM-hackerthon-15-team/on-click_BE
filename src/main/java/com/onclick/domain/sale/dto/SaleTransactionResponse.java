@@ -1,6 +1,6 @@
 package com.onclick.domain.sale.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 
@@ -12,12 +12,12 @@ public record SaleTransactionResponse(
         Long saleId,
         Long storeId,
         String clientTransactionId,
-        Instant soldAt,
+        LocalDateTime soldAt,
         int totalQuantity,
         long totalPaidAmount,
         SaleStatus status,
-        Instant createdAt,
-        Instant cancelledAt,
+        LocalDateTime createdAt,
+        LocalDateTime cancelledAt,
         List<SaleItemResponse> items
 ) {
 

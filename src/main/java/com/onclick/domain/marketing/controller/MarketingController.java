@@ -8,6 +8,7 @@ import com.onclick.domain.marketing.dto.MarketingUpdateRequest;
 import com.onclick.domain.marketing.service.MarketingService;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,13 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/stores/{storeId}/marketings")
+@RequiredArgsConstructor
 public class MarketingController {
 
     private final MarketingService marketingService;
-
-    public MarketingController(MarketingService marketingService) {
-        this.marketingService = marketingService;
-    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -69,7 +67,6 @@ public class MarketingController {
     }
 
     @PostMapping("/{marketingId}/approve")
-    @ResponseStatus(HttpStatus.ACCEPTED)
     public MarketingResponse approve(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long storeId,

@@ -47,7 +47,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/auth/signup", "/auth/login").permitAll()
-                        .requestMatchers("/public/media/**", "/integrations/instagram/callback").permitAll()
+                        .requestMatchers("/public/media/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)

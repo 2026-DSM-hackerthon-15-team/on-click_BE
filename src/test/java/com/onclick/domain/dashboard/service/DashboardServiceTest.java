@@ -3,8 +3,8 @@ package com.onclick.domain.dashboard.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 
 import com.onclick.common.ai.AiClient;
@@ -14,6 +14,7 @@ import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
 import com.onclick.domain.auth.entity.User;
 import com.onclick.domain.product.entity.Product;
+import com.onclick.domain.sale.entity.SaleStatus;
 import com.onclick.domain.sale.entity.SaleTransaction;
 import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.domain.store.entity.Store;
@@ -35,11 +36,11 @@ import static org.mockito.Mockito.verify;
 class DashboardServiceTest {
 
     private static final Long STORE_ID = 3L;
-    private static final ZoneId STORE_ZONE = ZoneId.of("Asia/Seoul");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Seoul");
     private static final LocalDate BUSINESS_DATE = LocalDate.of(2026, 7, 13);
-    private static final Instant NOW = Instant.parse("2026-07-13T06:00:00Z");
-    private static final Instant DAY_START = Instant.parse("2026-07-12T15:00:00Z");
-    private static final Instant DAY_END = Instant.parse("2026-07-13T15:00:00Z");
+    private static final LocalDateTime NOW = LocalDateTime.parse("2026-07-13T15:00:00");
+    private static final LocalDateTime DAY_START = LocalDateTime.parse("2026-07-13T00:00:00");
+    private static final LocalDateTime DAY_END = LocalDateTime.parse("2026-07-14T00:00:00");
 
     @Mock
     private SaleTransactionRepository saleTransactionRepository;
@@ -57,7 +58,7 @@ class DashboardServiceTest {
 
     @BeforeEach
     void setUp() {
-        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        Clock clock = Clock.fixed(Instant.parse("2026-07-13T06:00:00Z"), BUSINESS_ZONE);
         dashboardService = new DashboardService(
                 saleTransactionRepository,
                 storeAccessValidator,
@@ -67,8 +68,7 @@ class DashboardServiceTest {
         given(storeAccessValidator.validate(jwt, STORE_ID))
                 .willReturn(new Store(
                         new User("dashboard-owner", "password-hash"),
-                        "강남점",
-                        STORE_ZONE.getId()
+                        "강남점"
                 ));
     }
 
@@ -141,7 +141,7 @@ class DashboardServiceTest {
 
     @Test
     void forecastsKeepPublicContractAndUseCompletedTransactionSales() {
-        Instant generatedAt = Instant.parse("2026-07-13T06:00:30Z");
+        LocalDateTime generatedAt = LocalDateTime.parse("2026-07-13T15:00:30");
         givenTransactionsForToday(List.of(
                 completedTransaction("TX-1", atHour(9, 10), item(1, 2, 8_000)),
                 completedTransaction("TX-2", atHour(10, 5), item(1, 1, 2_000)),
@@ -172,17 +172,20 @@ class DashboardServiceTest {
 
     private void givenTransactionsForToday(List<SaleTransaction> transactions) {
         given(saleTransactionRepository
-                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
+                .findAllByStoreIdAndStatusAndSoldAtGreaterThanEqualAndSoldAtLessThanOrderBySoldAtAsc(
                         STORE_ID,
+                        SaleStatus.COMPLETED,
                         DAY_START,
                         DAY_END
                 ))
-                .willReturn(transactions);
+                .willReturn(transactions.stream()
+                        .filter(transaction -> transaction.getStatus() == SaleStatus.COMPLETED)
+                        .toList());
     }
 
     private SaleTransaction completedTransaction(
             String clientTransactionId,
-            Instant soldAt,
+            LocalDateTime soldAt,
             Item... items
     ) {
         SaleTransaction transaction = SaleTransaction.create(STORE_ID, clientTransactionId, soldAt);
@@ -194,7 +197,7 @@ class DashboardServiceTest {
 
     private SaleTransaction cancelledTransaction(
             String clientTransactionId,
-            Instant soldAt,
+            LocalDateTime soldAt,
             Item... items
     ) {
         SaleTransaction transaction = completedTransaction(clientTransactionId, soldAt, items);
@@ -212,8 +215,8 @@ class DashboardServiceTest {
         return product;
     }
 
-    private Instant atHour(int hour, int minute) {
-        return BUSINESS_DATE.atTime(hour, minute).atZone(STORE_ZONE).toInstant();
+    private LocalDateTime atHour(int hour, int minute) {
+        return BUSINESS_DATE.atTime(hour, minute);
     }
 
     private record Item(int lineNo, int quantity, long paidAmount) {

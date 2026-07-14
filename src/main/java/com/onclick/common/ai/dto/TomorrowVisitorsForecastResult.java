@@ -1,11 +1,11 @@
 package com.onclick.common.ai.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 public record TomorrowVisitorsForecastResult(
         long expectedVisitors,
-        Instant generatedAt
+        LocalDateTime generatedAt
 ) {
 
     public TomorrowVisitorsForecastResult {

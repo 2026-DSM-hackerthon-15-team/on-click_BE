@@ -6,6 +6,7 @@ import java.util.List;
 import com.onclick.common.ai.AiClient;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
+import com.onclick.common.time.KoreanTime;
 import com.onclick.domain.marketing.dto.MarketingGenerateRequest;
 import com.onclick.domain.marketing.dto.MarketingResponse;
 import com.onclick.domain.marketing.dto.MarketingUpdateRequest;
@@ -18,36 +19,20 @@ import com.onclick.domain.store.service.StoreAccessValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
-import org.springframework.context.ApplicationEventPublisher;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class MarketingService {
 
     private final MarketingContentRepository repository;
     private final MediaStorageService mediaStorageService;
     private final StoreAccessValidator storeAccessValidator;
     private final AiClient aiClient;
-    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-
-    public MarketingService(
-            MarketingContentRepository repository,
-            MediaStorageService mediaStorageService,
-            StoreAccessValidator storeAccessValidator,
-            AiClient aiClient,
-            ApplicationEventPublisher eventPublisher,
-            Clock clock
-    ) {
-        this.repository = repository;
-        this.mediaStorageService = mediaStorageService;
-        this.storeAccessValidator = storeAccessValidator;
-        this.aiClient = aiClient;
-        this.eventPublisher = eventPublisher;
-        this.clock = clock;
-    }
 
     @Transactional
     public MarketingResponse generate(Jwt jwt, Long storeId, MarketingGenerateRequest request) {
@@ -115,11 +100,10 @@ public class MarketingService {
         storeAccessValidator.validate(jwt, storeId);
         MarketingContent marketing = find(storeId, marketingId);
         try {
-            marketing.approve(clock.instant());
+            marketing.approve(KoreanTime.now(clock));
         } catch (IllegalStateException exception) {
             throw new ApiException(ErrorCode.MARKETING_STATUS_CONFLICT, exception.getMessage());
         }
-        eventPublisher.publishEvent(new MarketingApprovedEvent(marketing.getId()));
         return MarketingResponse.from(marketing, mediaStorageService);
     }
 

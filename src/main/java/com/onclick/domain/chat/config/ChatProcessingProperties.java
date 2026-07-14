@@ -2,47 +2,19 @@ package com.onclick.domain.chat.config;
 
 import java.time.Duration;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.chat.processing")
+@Getter
+@Setter
 public class ChatProcessingProperties {
 
     private int maxAttempts = 3;
     private Duration leaseDuration = Duration.ofMinutes(2);
     private Duration retryDelay = Duration.ofSeconds(10);
     private int recoveryBatchSize = 50;
-
-    public int getMaxAttempts() {
-        return maxAttempts;
-    }
-
-    public void setMaxAttempts(int maxAttempts) {
-        this.maxAttempts = maxAttempts;
-    }
-
-    public Duration getLeaseDuration() {
-        return leaseDuration;
-    }
-
-    public void setLeaseDuration(Duration leaseDuration) {
-        this.leaseDuration = leaseDuration;
-    }
-
-    public Duration getRetryDelay() {
-        return retryDelay;
-    }
-
-    public void setRetryDelay(Duration retryDelay) {
-        this.retryDelay = retryDelay;
-    }
-
-    public int getRecoveryBatchSize() {
-        return recoveryBatchSize;
-    }
-
-    public void setRecoveryBatchSize(int recoveryBatchSize) {
-        this.recoveryBatchSize = recoveryBatchSize;
-    }
 
     public int safeMaxAttempts() {
         return Math.max(1, maxAttempts);

@@ -1,7 +1,7 @@
 package com.onclick.domain.consulting.repository;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,7 +21,7 @@ public interface ConsultingRepository extends JpaRepository<Consulting, Long> {
 
     Optional<Consulting> findByIdAndStoreId(Long consultingId, Long storeId);
 
-    boolean existsByStoreIdAndTargetDate(Long storeId, LocalDate targetDate);
+    Optional<Consulting> findByStoreIdAndTargetDate(Long storeId, LocalDate targetDate);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT consulting FROM Consulting consulting WHERE consulting.id = :consultingId")
@@ -36,7 +36,7 @@ public interface ConsultingRepository extends JpaRepository<Consulting, Long> {
              ORDER BY consulting.targetDate ASC, consulting.id ASC
             """)
     List<Long> findRetryableIds(
-            @Param("now") Instant now,
+            @Param("now") LocalDateTime now,
             @Param("maxAttempts") int maxAttempts,
             Pageable pageable
     );

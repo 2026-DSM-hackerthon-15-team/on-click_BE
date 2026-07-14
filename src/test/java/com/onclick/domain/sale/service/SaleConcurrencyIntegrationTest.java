@@ -1,6 +1,6 @@
 package com.onclick.domain.sale.service;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +53,7 @@ class SaleConcurrencyIntegrationTest {
     void concurrentDuplicateCreateAndCancelReturnOneStableTransaction() throws Exception {
         Fixture fixture = fixture();
         String clientTransactionId = "concurrent-" + UUID.randomUUID();
-        Instant soldAt = Instant.parse("2026-07-13T03:15:00.123456789Z");
+        LocalDateTime soldAt = LocalDateTime.parse("2026-07-13T12:15:00.123456789");
         SaleTransactionCreateRequest request = new SaleTransactionCreateRequest(
                 clientTransactionId,
                 soldAt,
@@ -101,8 +101,7 @@ class SaleConcurrencyIntegrationTest {
                                   "password": "%s",
                                   "name": "동시성 테스트 사용자",
                                   "email": "%s@example.com",
-                                  "storeName": "동시성 테스트 매장",
-                                  "timeZone": "Asia/Seoul"
+                                  "storeName": "동시성 테스트 매장"
                                 }
                                 """.formatted(accountId, password, accountId)))
                 .andExpect(status().isCreated())

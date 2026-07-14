@@ -1,41 +1,81 @@
 package com.onclick.domain.sale.service;
 
 import java.time.Clock;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import com.onclick.common.time.KoreanTime;
 import com.onclick.domain.sale.dto.SaleItemRequest;
 import com.onclick.domain.sale.dto.SaleTransactionCreateRequest;
+import com.onclick.domain.sale.dto.SaleTransactionPageResponse;
 import com.onclick.domain.sale.dto.SaleTransactionResponse;
 import com.onclick.domain.sale.entity.SaleItem;
 import com.onclick.domain.sale.entity.SaleTransaction;
+import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.domain.store.service.StoreAccessValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class SaleService {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final SaleTransactionExecutor transactionExecutor;
+    private final SaleTransactionRepository saleTransactionRepository;
     private final StoreAccessValidator storeAccessValidator;
     private final Clock clock;
 
-    public SaleService(
-            SaleTransactionExecutor transactionExecutor,
-            StoreAccessValidator storeAccessValidator,
-            Clock clock
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public SaleTransactionPageResponse findTransactions(
+            Jwt jwt,
+            Long storeId,
+            int page,
+            int size,
+            String sortBy,
+            String sortDirection
     ) {
-        this.transactionExecutor = transactionExecutor;
-        this.storeAccessValidator = storeAccessValidator;
-        this.clock = clock;
+        storeAccessValidator.validate(jwt, storeId);
+        validatePageRequest(page, size);
+        SaleSort saleSort = resolveSort(sortBy, sortDirection);
+        Sort sort = Sort.by(saleSort.direction(), saleSort.entityProperty());
+        if (!"id".equals(saleSort.entityProperty())) {
+            sort = sort.and(Sort.by(saleSort.direction(), "id"));
+        }
+
+        Page<Long> transactionIds = saleTransactionRepository.findPageIdsByStoreId(
+                storeId,
+                PageRequest.of(page, size, sort)
+        );
+        List<SaleTransactionResponse> content = loadTransactions(
+                storeId,
+                transactionIds.getContent()
+        );
+        return SaleTransactionPageResponse.from(
+                transactionIds,
+                content,
+                saleSort.apiField(),
+                saleSort.direction().name().toLowerCase(Locale.ROOT)
+        );
     }
 
     public SaleTransactionResult createTransaction(
@@ -45,7 +85,7 @@ public class SaleService {
     ) {
         storeAccessValidator.validate(jwt, storeId);
         String clientTransactionId = normalizeClientTransactionId(request.clientTransactionId());
-        Instant soldAt = normalizeDatabaseInstant(request.soldAt());
+        LocalDateTime soldAt = normalizeDatabaseDateTime(request.soldAt());
         validateUniqueLineNumbers(request.items());
 
         if (clientTransactionId != null) {
@@ -88,14 +128,14 @@ public class SaleService {
         SaleTransaction transaction = transactionExecutor.cancel(
                 storeId,
                 saleId,
-                normalizeDatabaseInstant(clock.instant())
+                normalizeDatabaseDateTime(KoreanTime.now(clock))
         );
         return SaleTransactionResponse.from(transaction);
     }
 
     private SaleTransactionResult existingResult(
             SaleTransaction existing,
-            Instant normalizedSoldAt,
+            LocalDateTime normalizedSoldAt,
             SaleTransactionCreateRequest request
     ) {
         if (!hasSamePayload(existing, normalizedSoldAt, request)) {
@@ -113,12 +153,74 @@ public class SaleService {
         }
     }
 
+    private List<SaleTransactionResponse> loadTransactions(
+            Long storeId,
+            List<Long> transactionIds
+    ) {
+        if (transactionIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, SaleTransaction> transactionsById = saleTransactionRepository
+                .findAllWithItemsByStoreIdAndIdIn(storeId, transactionIds)
+                .stream()
+                .collect(Collectors.toMap(SaleTransaction::getId, Function.identity()));
+        return transactionIds.stream()
+                .map(transactionsById::get)
+                .map(SaleTransactionResponse::from)
+                .toList();
+    }
+
+    private void validatePageRequest(int page, int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "page는 0 이상, size는 1 이상 100 이하여야 합니다."
+            );
+        }
+    }
+
+    private SaleSort resolveSort(String sortBy, String sortDirection) {
+        String normalizedSortBy = sortBy == null
+                ? "soldat"
+                : sortBy.trim().toLowerCase(Locale.ROOT);
+        String normalizedDirection = sortDirection == null
+                ? "desc"
+                : sortDirection.trim().toLowerCase(Locale.ROOT);
+
+        SaleSortField sortField = switch (normalizedSortBy) {
+            case "soldat" -> new SaleSortField("soldAt", "soldAt");
+            case "createdat" -> new SaleSortField("createdAt", "createdAt");
+            case "saleid" -> new SaleSortField("saleId", "id");
+            case "status" -> new SaleSortField("status", "status");
+            default -> throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "sortBy는 soldAt, createdAt, saleId, status 중 하나여야 합니다."
+            );
+        };
+        Sort.Direction direction = switch (normalizedDirection) {
+            case "asc" -> Sort.Direction.ASC;
+            case "desc" -> Sort.Direction.DESC;
+            default -> throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "sortDirection은 asc 또는 desc여야 합니다."
+            );
+        };
+        return new SaleSort(sortField.apiField(), sortField.entityProperty(), direction);
+    }
+
+    private record SaleSortField(String apiField, String entityProperty) {
+    }
+
+    private record SaleSort(String apiField, String entityProperty, Sort.Direction direction) {
+    }
+
     private boolean hasSamePayload(
             SaleTransaction existing,
-            Instant normalizedSoldAt,
+            LocalDateTime normalizedSoldAt,
             SaleTransactionCreateRequest request
     ) {
-        if (!normalizeDatabaseInstant(existing.getSoldAt()).equals(normalizedSoldAt)
+        if (!normalizeDatabaseDateTime(existing.getSoldAt()).equals(normalizedSoldAt)
                 || existing.getItems().size() != request.items().size()) {
             return false;
         }
@@ -147,7 +249,7 @@ public class SaleService {
         return clientTransactionId.trim();
     }
 
-    private Instant normalizeDatabaseInstant(Instant value) {
+    private LocalDateTime normalizeDatabaseDateTime(LocalDateTime value) {
         return value.truncatedTo(ChronoUnit.MICROS);
     }
 

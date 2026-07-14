@@ -1,6 +1,6 @@
 package com.onclick.domain.product.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import com.onclick.domain.product.entity.Product;
 
@@ -10,8 +10,8 @@ public record ProductResponse(
         String name,
         long price,
         boolean active,
-        Instant createdAt,
-        Instant updatedAt
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
 
     public static ProductResponse from(Product product) {

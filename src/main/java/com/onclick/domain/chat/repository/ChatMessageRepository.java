@@ -1,6 +1,6 @@
 package com.onclick.domain.chat.repository;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,9 +19,22 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     List<ChatMessage> findAllByChatRoom_IdOrderByIdAsc(Long chatRoomId);
 
-    List<ChatMessage> findAllByChatRoom_IdAndIdGreaterThanOrderByIdAsc(
-            Long chatRoomId,
-            Long afterId
+    @Query("""
+            SELECT message
+              FROM ChatMessage message
+             WHERE message.chatRoom.id = :chatRoomId
+               AND (
+                    message.id > :afterId
+                    OR (
+                        message.id = :afterId
+                        AND message.role = com.onclick.domain.chat.entity.ChatMessageRole.ASSISTANT
+                    )
+               )
+             ORDER BY message.id ASC
+            """)
+    List<ChatMessage> findPollingMessages(
+            @Param("chatRoomId") Long chatRoomId,
+            @Param("afterId") Long afterId
     );
 
     Optional<ChatMessage> findByIdAndChatRoom_Id(Long id, Long chatRoomId);
@@ -33,20 +46,6 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @EntityGraph(attributePaths = "chatRoom")
     @Query("SELECT message FROM ChatMessage message WHERE message.id = :id")
     Optional<ChatMessage> findWithChatRoomById(@Param("id") Long id);
-
-    @Query("""
-            SELECT message
-              FROM ChatMessage message
-             WHERE message.chatRoom.id = :chatRoomId
-               AND message.id < :beforeId
-               AND message.status = com.onclick.domain.chat.entity.ChatMessageStatus.COMPLETED
-             ORDER BY message.id DESC
-            """)
-    List<ChatMessage> findRecentCompletedHistory(
-            @Param("chatRoomId") Long chatRoomId,
-            @Param("beforeId") Long beforeId,
-            Pageable pageable
-    );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
@@ -61,8 +60,8 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
             """)
     int claimPending(
             @Param("messageId") Long messageId,
-            @Param("now") Instant now,
-            @Param("leaseUntil") Instant leaseUntil
+            @Param("now") LocalDateTime now,
+            @Param("leaseUntil") LocalDateTime leaseUntil
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -81,7 +80,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
             @Param("messageId") Long messageId,
             @Param("attempt") int attempt,
             @Param("content") String content,
-            @Param("now") Instant now
+            @Param("now") LocalDateTime now
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -101,8 +100,8 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
             @Param("attempt") int attempt,
             @Param("status") ChatMessageStatus status,
             @Param("content") String content,
-            @Param("nextRetryAt") Instant nextRetryAt,
-            @Param("now") Instant now
+            @Param("nextRetryAt") LocalDateTime nextRetryAt,
+            @Param("now") LocalDateTime now
     );
 
     @Query("""
@@ -116,7 +115,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     List<Long> findEligibleMessageIds(
             @Param("role") ChatMessageRole role,
             @Param("status") ChatMessageStatus status,
-            @Param("now") Instant now,
+            @Param("now") LocalDateTime now,
             Pageable pageable
     );
 }

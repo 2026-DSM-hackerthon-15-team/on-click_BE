@@ -1,6 +1,6 @@
 package com.onclick.domain.marketing.entity;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -11,6 +11,7 @@ import com.onclick.domain.media.entity.MediaFile;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -21,12 +22,20 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OrderColumn;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "marketing_contents")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MarketingContent {
 
     @Id
@@ -43,6 +52,7 @@ public class MarketingContent {
     private String content;
 
     @Column(nullable = false, columnDefinition = "TEXT")
+    @Getter(AccessLevel.NONE)
     private String hashtags;
 
     @Enumerated(EnumType.STRING)
@@ -56,6 +66,7 @@ public class MarketingContent {
             inverseJoinColumns = @JoinColumn(name = "media_id")
     )
     @OrderColumn(name = "position")
+    @Getter(AccessLevel.NONE)
     private List<MediaFile> mediaFiles = new ArrayList<>();
 
     @Column(name = "idempotency_key", nullable = false, unique = true, length = 100)
@@ -65,13 +76,13 @@ public class MarketingContent {
     private int publishAttemptCount;
 
     @Column(name = "next_publish_at")
-    private Instant nextPublishAt;
+    private LocalDateTime nextPublishAt;
 
     @Column(name = "approved_at")
-    private Instant approvedAt;
+    private LocalDateTime approvedAt;
 
     @Column(name = "published_at")
-    private Instant publishedAt;
+    private LocalDateTime publishedAt;
 
     @Column(name = "external_post_id", length = 100)
     private String externalPostId;
@@ -83,13 +94,12 @@ public class MarketingContent {
     private String failureReason;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    @CreatedDate
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
-    protected MarketingContent() {
-    }
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
 
     public MarketingContent(
             Long storeId,
@@ -105,18 +115,6 @@ public class MarketingContent {
         this.mediaFiles.addAll(mediaFiles == null ? List.of() : mediaFiles);
         this.status = MarketingStatus.DRAFT;
         this.idempotencyKey = UUID.randomUUID().toString();
-    }
-
-    @PrePersist
-    void prePersist() {
-        Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = Instant.now();
     }
 
     public void edit(
@@ -143,7 +141,7 @@ public class MarketingContent {
         }
     }
 
-    public void approve(Instant now) {
+    public void approve(LocalDateTime now) {
         if (status != MarketingStatus.DRAFT && status != MarketingStatus.FAILED) {
             throw new IllegalStateException("Marketing content cannot be approved from status " + status);
         }
@@ -156,7 +154,7 @@ public class MarketingContent {
         failureReason = null;
     }
 
-    public void beginPublishing(Instant now) {
+    public void beginPublishing(LocalDateTime now) {
         if (status != MarketingStatus.APPROVED) {
             throw new IllegalStateException("Marketing content is not ready to publish");
         }
@@ -166,7 +164,7 @@ public class MarketingContent {
         failureReason = null;
     }
 
-    public void markPublished(String externalPostId, String publishedUrl, Instant publishedAt) {
+    public void markPublished(String externalPostId, String publishedUrl, LocalDateTime publishedAt) {
         status = MarketingStatus.PUBLISHED;
         this.externalPostId = externalPostId;
         this.publishedUrl = publishedUrl;
@@ -175,7 +173,7 @@ public class MarketingContent {
         this.failureReason = null;
     }
 
-    public void markPublishFailed(String reason, Instant retryAt, boolean retryable) {
+    public void markPublishFailed(String reason, LocalDateTime retryAt, boolean retryable) {
         failureReason = truncate(reason, 1000);
         if (retryable) {
             status = MarketingStatus.APPROVED;
@@ -228,20 +226,5 @@ public class MarketingContent {
         return value.substring(0, Math.min(value.length(), maxLength));
     }
 
-    public Long getId() { return id; }
-    public Long getStoreId() { return storeId; }
-    public String getTitle() { return title; }
-    public String getContent() { return content; }
-    public MarketingStatus getStatus() { return status; }
     public List<MediaFile> getMediaFiles() { return List.copyOf(mediaFiles); }
-    public String getIdempotencyKey() { return idempotencyKey; }
-    public int getPublishAttemptCount() { return publishAttemptCount; }
-    public Instant getNextPublishAt() { return nextPublishAt; }
-    public Instant getApprovedAt() { return approvedAt; }
-    public Instant getPublishedAt() { return publishedAt; }
-    public String getExternalPostId() { return externalPostId; }
-    public String getPublishedUrl() { return publishedUrl; }
-    public String getFailureReason() { return failureReason; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
 }

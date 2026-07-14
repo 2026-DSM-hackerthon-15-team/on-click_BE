@@ -41,7 +41,7 @@ class StoreAccessValidatorTest {
 
     @Test
     void returnsStoreOwnedByAuthenticatedUser() {
-        Store store = new Store(new User("owner01", "hash"), "1호점", "Asia/Seoul");
+        Store store = new Store(new User("owner01", "hash"), "1호점");
         when(userIdResolver.resolve(jwt)).thenReturn(5L);
         when(storeRepository.findByIdAndOwnerId(9L, 5L)).thenReturn(Optional.of(store));
 

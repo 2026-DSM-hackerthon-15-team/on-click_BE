@@ -9,15 +9,14 @@ class ChatResponseComposerTest {
     private final ChatResponseComposer composer = new ChatResponseComposer();
 
     @Test
-    void returnsBothActionLinksWhenBothIntentsArePresent() {
-        assertThat(composer.actionResponse(7L, "컨설팅과 인스타 홍보를 진행해 줘"))
-                .hasValueSatisfying(response -> assertThat(response)
-                        .contains("[컨설팅 페이지](/stores/7/consultings)")
-                        .contains("[마케팅 페이지](/stores/7/marketings)"));
+    void trimsGeneratedResponse() {
+        assertThat(composer.normalizeGeneratedResponse("  AI 답변  ")).isEqualTo("AI 답변");
     }
 
     @Test
-    void returnsNoActionForOrdinaryQuestion() {
-        assertThat(composer.actionResponse(7L, "오늘 매출이 얼마야?")).isEmpty();
+    void rejectsBlankGeneratedResponse() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> composer.normalizeGeneratedResponse("  "))
+                .isInstanceOf(IllegalStateException.class);
     }
 }

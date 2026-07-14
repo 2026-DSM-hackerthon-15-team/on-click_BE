@@ -1,6 +1,6 @@
 package com.onclick.domain.media.repository;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -33,7 +33,7 @@ public interface MediaFileRepository extends JpaRepository<MediaFile, Long> {
                   where attached.id = media.id
               )
             """)
-    List<MediaFile> findOrphansCreatedBefore(@Param("cutoff") Instant cutoff);
+    List<MediaFile> findOrphansCreatedBefore(@Param("cutoff") LocalDateTime cutoff);
 
     @Query("""
             select count(marketing)

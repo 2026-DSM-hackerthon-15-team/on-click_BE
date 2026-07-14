@@ -1,16 +1,9 @@
 package com.onclick.domain.chat.generation;
 
-import java.util.List;
-
 public record ChatGenerationRequest(
+        Long userId,
         Long storeId,
         Long chatRoomId,
-        Long userMessageId,
-        String message,
-        List<ChatHistoryItem> history
+        String message
 ) {
-
-    public ChatGenerationRequest {
-        history = List.copyOf(history);
-    }
 }

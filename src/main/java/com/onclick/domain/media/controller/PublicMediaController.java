@@ -3,6 +3,7 @@ package com.onclick.domain.media.controller;
 import com.onclick.domain.media.service.MediaStorageService;
 import com.onclick.domain.media.service.MediaStorageService.StoredMedia;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -18,13 +19,10 @@ import java.time.Duration;
 
 @RestController
 @RequestMapping("/public/media")
+@RequiredArgsConstructor
 public class PublicMediaController {
 
     private final MediaStorageService mediaStorageService;
-
-    public PublicMediaController(MediaStorageService mediaStorageService) {
-        this.mediaStorageService = mediaStorageService;
-    }
 
     @GetMapping("/{publicId}")
     public ResponseEntity<?> get(@PathVariable String publicId) {

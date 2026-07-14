@@ -2,6 +2,9 @@ package com.onclick.global.error;
 
 import java.util.Objects;
 
+import lombok.Getter;
+
+@Getter
 public class ApiException extends RuntimeException {
 
     private final ErrorCode errorCode;
@@ -24,7 +27,4 @@ public class ApiException extends RuntimeException {
         return errorCode;
     }
 
-    public ErrorCode getErrorCode() {
-        return errorCode;
-    }
 }

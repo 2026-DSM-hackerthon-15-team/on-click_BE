@@ -1,6 +1,6 @@
 package com.onclick.domain.marketing.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.onclick.domain.marketing.entity.MarketingContent;
@@ -19,10 +19,10 @@ public record MarketingResponse(
         String externalPostId,
         String publishedUrl,
         String failureReason,
-        Instant approvedAt,
-        Instant publishedAt,
-        Instant createdAt,
-        Instant updatedAt
+        LocalDateTime approvedAt,
+        LocalDateTime publishedAt,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
     public static MarketingResponse from(MarketingContent marketing, MediaStorageService storage) {
         return new MarketingResponse(

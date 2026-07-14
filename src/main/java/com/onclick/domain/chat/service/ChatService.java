@@ -1,9 +1,9 @@
 package com.onclick.domain.chat.service;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 
+import com.onclick.common.time.KoreanTime;
 import com.onclick.domain.chat.dto.ChatMessageCreateRequest;
 import com.onclick.domain.chat.dto.ChatMessageExchangeResponse;
 import com.onclick.domain.chat.dto.ChatMessageResponse;
@@ -18,12 +18,14 @@ import com.onclick.domain.store.service.StoreAccessValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class ChatService {
 
     static final String DEFAULT_ROOM_TITLE = "새 채팅";
@@ -35,20 +37,6 @@ public class ChatService {
     private final StoreAccessValidator storeAccessValidator;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-
-    public ChatService(
-            ChatRoomRepository chatRoomRepository,
-            ChatMessageRepository chatMessageRepository,
-            StoreAccessValidator storeAccessValidator,
-            ApplicationEventPublisher eventPublisher,
-            Clock clock
-    ) {
-        this.chatRoomRepository = chatRoomRepository;
-        this.chatMessageRepository = chatMessageRepository;
-        this.storeAccessValidator = storeAccessValidator;
-        this.eventPublisher = eventPublisher;
-        this.clock = clock;
-    }
 
     @Transactional
     public ChatRoomResponse createRoom(
@@ -123,7 +111,7 @@ public class ChatService {
         ChatMessage assistantMessage = chatMessageRepository.saveAndFlush(
                 ChatMessage.pendingAssistant(room, userMessage.getId())
         );
-        room.touch(Instant.now(clock));
+        room.touch(KoreanTime.now(clock));
 
         eventPublisher.publishEvent(new ChatMessageRequestedEvent(assistantMessage.getId()));
         return new ChatMessageExchangeResponse(
@@ -147,7 +135,7 @@ public class ChatService {
 
         List<ChatMessage> messages = afterId == null
                 ? chatMessageRepository.findAllByChatRoom_IdOrderByIdAsc(room.getId())
-                : chatMessageRepository.findAllByChatRoom_IdAndIdGreaterThanOrderByIdAsc(
+                : chatMessageRepository.findPollingMessages(
                         room.getId(),
                         afterId
                 );

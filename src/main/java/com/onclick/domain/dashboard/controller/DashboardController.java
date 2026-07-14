@@ -6,6 +6,7 @@ import com.onclick.domain.dashboard.dto.HourlySalesResponse;
 import com.onclick.domain.dashboard.dto.HourlyVisitorsResponse;
 import com.onclick.domain.dashboard.dto.TomorrowVisitorsForecastResponse;
 import com.onclick.domain.dashboard.service.DashboardService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,13 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/stores/{storeId}/dashboard")
+@RequiredArgsConstructor
 public class DashboardController {
 
     private final DashboardService dashboardService;
-
-    public DashboardController(DashboardService dashboardService) {
-        this.dashboardService = dashboardService;
-    }
 
     @GetMapping("/summary")
     public DashboardSummaryResponse getSummary(

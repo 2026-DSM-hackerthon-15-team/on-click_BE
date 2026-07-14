@@ -1,6 +1,6 @@
 package com.onclick.domain.sale.service;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,23 +15,17 @@ import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@RequiredArgsConstructor
 public class SaleTransactionExecutor {
 
     private final SaleTransactionRepository saleTransactionRepository;
     private final ProductRepository productRepository;
-
-    public SaleTransactionExecutor(
-            SaleTransactionRepository saleTransactionRepository,
-            ProductRepository productRepository
-    ) {
-        this.saleTransactionRepository = saleTransactionRepository;
-        this.productRepository = productRepository;
-    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public Optional<SaleTransaction> findByClientTransactionId(
@@ -48,7 +42,7 @@ public class SaleTransactionExecutor {
     public SaleTransaction create(
             Long storeId,
             String clientTransactionId,
-            Instant soldAt,
+            LocalDateTime soldAt,
             List<SaleItemRequest> items
     ) {
         Map<Long, Product> products = loadProducts(storeId, items);
@@ -67,7 +61,7 @@ public class SaleTransactionExecutor {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public SaleTransaction cancel(Long storeId, Long saleId, Instant cancelledAt) {
+    public SaleTransaction cancel(Long storeId, Long saleId, LocalDateTime cancelledAt) {
         saleTransactionRepository.cancelIfCompleted(saleId, storeId, cancelledAt);
         return saleTransactionRepository.findByIdAndStoreId(saleId, storeId)
                 .orElseThrow(() -> new ApiException(ErrorCode.SALE_TRANSACTION_NOT_FOUND));

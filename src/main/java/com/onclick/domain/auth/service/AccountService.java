@@ -9,6 +9,7 @@ import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 import com.onclick.global.security.JwtUserIdResolver;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -16,24 +17,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class AccountService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUserIdResolver userIdResolver;
     private final UserInputValidator userInputValidator;
-
-    public AccountService(
-            UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            JwtUserIdResolver userIdResolver,
-            UserInputValidator userInputValidator
-    ) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.userIdResolver = userIdResolver;
-        this.userInputValidator = userInputValidator;
-    }
 
     @Transactional(readOnly = true)
     public AccountProfileResponse getProfile(Jwt jwt) {

@@ -3,6 +3,7 @@ package com.onclick.domain.media.controller;
 import com.onclick.domain.media.dto.MediaUploadResponse;
 import com.onclick.domain.media.service.MediaStorageService;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,13 +18,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/stores/{storeId}/media")
+@RequiredArgsConstructor
 public class MediaController {
 
     private final MediaStorageService mediaStorageService;
-
-    public MediaController(MediaStorageService mediaStorageService) {
-        this.mediaStorageService = mediaStorageService;
-    }
 
     @PostMapping(consumes = "multipart/form-data")
     @ResponseStatus(HttpStatus.CREATED)

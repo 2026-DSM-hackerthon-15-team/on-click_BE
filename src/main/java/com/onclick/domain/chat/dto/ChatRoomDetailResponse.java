@@ -1,6 +1,6 @@
 package com.onclick.domain.chat.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.onclick.domain.chat.entity.ChatRoom;
@@ -9,8 +9,8 @@ public record ChatRoomDetailResponse(
         Long id,
         Long storeId,
         String title,
-        Instant createdAt,
-        Instant updatedAt,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
         List<ChatMessageResponse> messages
 ) {
 

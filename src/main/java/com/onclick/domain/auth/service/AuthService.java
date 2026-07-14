@@ -14,12 +14,14 @@ import com.onclick.global.error.ErrorCode;
 import com.onclick.global.security.IssuedAccessToken;
 import com.onclick.global.security.JwtTokenProvider;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -28,22 +30,6 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final StoreInputValidator storeInputValidator;
     private final UserInputValidator userInputValidator;
-
-    public AuthService(
-            UserRepository userRepository,
-            StoreRepository storeRepository,
-            PasswordEncoder passwordEncoder,
-            JwtTokenProvider jwtTokenProvider,
-            StoreInputValidator storeInputValidator,
-            UserInputValidator userInputValidator
-    ) {
-        this.userRepository = userRepository;
-        this.storeRepository = storeRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtTokenProvider = jwtTokenProvider;
-        this.storeInputValidator = storeInputValidator;
-        this.userInputValidator = userInputValidator;
-    }
 
     @Transactional
     public SignUpResponse signUp(SignUpRequest request) {
@@ -70,11 +56,11 @@ public class AuthService {
         }
 
         String storeName = storeInputValidator.requireName(request.storeName());
-        String timeZone = storeInputValidator.normalizeTimeZone(request.timeZone());
         Store store = storeRepository.save(new Store(
                 user,
                 storeName,
-                timeZone,
+                storeInputValidator.normalizeIndustry(request.industry()),
+                storeInputValidator.normalizeRoadAddress(request.roadAddress()),
                 storeInputValidator.normalizeClosingTime(request.closingTime())
         ));
 
@@ -85,6 +71,8 @@ public class AuthService {
                 user.getEmail(),
                 store.getId(),
                 store.getName(),
+                store.getIndustry(),
+                store.getRoadAddress(),
                 store.getClosingTime(),
                 user.getCreatedAt()
         );

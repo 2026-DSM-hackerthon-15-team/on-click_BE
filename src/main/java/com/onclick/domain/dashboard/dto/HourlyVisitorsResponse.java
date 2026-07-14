@@ -6,7 +6,6 @@ import java.util.List;
 public record HourlyVisitorsResponse(
         Long storeId,
         LocalDate businessDate,
-        String timeZone,
         long totalVisitors,
         List<HourlyVisitorItem> hourly
 ) {

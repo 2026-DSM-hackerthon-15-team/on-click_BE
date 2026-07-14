@@ -6,7 +6,6 @@ import java.util.List;
 public record HourlySalesResponse(
         Long storeId,
         LocalDate businessDate,
-        String timeZone,
         String currency,
         long totalSalesAmount,
         long totalQuantity,

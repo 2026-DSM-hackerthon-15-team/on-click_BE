@@ -8,6 +8,7 @@ import com.onclick.domain.store.dto.UpdateStoreRequest;
 import com.onclick.domain.store.service.StoreService;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,13 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/stores")
+@RequiredArgsConstructor
 public class StoreController {
 
     private final StoreService storeService;
-
-    public StoreController(StoreService storeService) {
-        this.storeService = storeService;
-    }
 
     @GetMapping
     public List<StoreResponse> getStores(@AuthenticationPrincipal Jwt jwt) {

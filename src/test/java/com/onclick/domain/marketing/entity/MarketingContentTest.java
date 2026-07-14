@@ -3,7 +3,7 @@ package com.onclick.domain.marketing.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.onclick.domain.media.entity.MediaFile;
@@ -22,7 +22,7 @@ class MarketingContentTest {
                 List.of("신메뉴", "온클릭"),
                 List.of(media)
         );
-        Instant now = Instant.parse("2026-07-14T12:00:00Z");
+        LocalDateTime now = LocalDateTime.of(2026, 7, 14, 21, 0);
 
         marketing.approve(now);
         marketing.beginPublishing(now);
@@ -37,7 +37,7 @@ class MarketingContentTest {
     @Test
     void cannotApproveWithoutMediaOrEditAfterApproval() {
         MarketingContent noMedia = new MarketingContent(3L, "제목", "본문", List.of(), List.of());
-        assertThatThrownBy(() -> noMedia.approve(Instant.now()))
+        assertThatThrownBy(() -> noMedia.approve(LocalDateTime.of(2026, 7, 14, 21, 0)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("media");
 
@@ -48,7 +48,7 @@ class MarketingContentTest {
                 List.of(),
                 List.of(new MediaFile(3L, "menu.jpg", "stored.jpg", "image/jpeg", 100L))
         );
-        marketing.approve(Instant.now());
+        marketing.approve(LocalDateTime.of(2026, 7, 14, 21, 0));
         assertThatThrownBy(() -> marketing.edit("수정", null, null, null))
                 .isInstanceOf(IllegalStateException.class);
     }

@@ -10,14 +10,19 @@ import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Objects;
+
+import com.onclick.common.time.KoreanTime;
 
 @Component
 @ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "mock", matchIfMissing = true)
+@RequiredArgsConstructor
 public class MockAiClient implements AiClient {
 
     public static final long MOCK_CLOSING_SALES = 500_000L;
@@ -27,20 +32,16 @@ public class MockAiClient implements AiClient {
 
     private final Clock clock;
 
-    public MockAiClient(Clock clock) {
-        this.clock = clock;
-    }
-
     @Override
     public ClosingSalesForecastResult forecastClosingSales(ClosingSalesForecastRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        return new ClosingSalesForecastResult(MOCK_CLOSING_SALES, clock.instant());
+        return new ClosingSalesForecastResult(MOCK_CLOSING_SALES, now());
     }
 
     @Override
     public TomorrowVisitorsForecastResult forecastTomorrowVisitors(TomorrowVisitorsForecastRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        return new TomorrowVisitorsForecastResult(MOCK_TOMORROW_VISITORS, clock.instant());
+        return new TomorrowVisitorsForecastResult(MOCK_TOMORROW_VISITORS, now());
     }
 
     @Override
@@ -51,21 +52,24 @@ public class MockAiClient implements AiClient {
                 + "원, 주문 " + request.orderCount()
                 + "건, 판매수량 " + request.totalQuantity()
                 + "개를 기준으로 생성한 컨설팅입니다.";
-        return new ConsultingGenerationResult(title, content, clock.instant());
+        return new ConsultingGenerationResult(title, content);
     }
 
     @Override
     public ChatGenerationResult generateChatReply(ChatGenerationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        return new ChatGenerationResult(MOCK_CHAT_PREFIX + request.message(), clock.instant());
+        return new ChatGenerationResult(MOCK_CHAT_PREFIX + request.message());
     }
 
     @Override
     public MarketingGenerationResult generateMarketing(MarketingGenerationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         return new MarketingGenerationResult(
-                MOCK_MARKETING_PREFIX + request.storeName() + " - " + request.prompt(),
-                clock.instant()
+                MOCK_MARKETING_PREFIX + request.storeName() + " - " + request.prompt()
         );
+    }
+
+    private LocalDateTime now() {
+        return KoreanTime.now(clock);
     }
 }

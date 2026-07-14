@@ -1,7 +1,7 @@
 package com.onclick.domain.consulting.dto;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import com.onclick.domain.consulting.entity.Consulting;
 import com.onclick.domain.consulting.entity.ConsultingStatus;
@@ -13,9 +13,9 @@ public record ConsultingSummaryResponse(
         String title,
         ConsultingStatus status,
         int attemptCount,
-        Instant generatedAt,
-        Instant createdAt,
-        Instant updatedAt
+        LocalDateTime generatedAt,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
 
     public static ConsultingSummaryResponse from(Consulting consulting) {

@@ -1,6 +1,6 @@
 package com.onclick.domain.auth.controller;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import com.onclick.domain.auth.dto.AccountProfileResponse;
 import com.onclick.domain.auth.dto.ChangePasswordRequest;
@@ -55,8 +55,8 @@ class AccountControllerTest {
                 "owner01",
                 "홍길동",
                 "owner@example.com",
-                Instant.parse("2026-07-14T01:00:00Z"),
-                Instant.parse("2026-07-14T02:00:00Z")
+                LocalDateTime.parse("2026-07-14T10:00:00"),
+                LocalDateTime.parse("2026-07-14T11:00:00")
         ));
 
         mockMvc.perform(get("/me"))

@@ -3,8 +3,7 @@ package com.onclick;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -54,11 +53,11 @@ class AuthProductApiIntegrationTest {
     void applicationContextStartsAfterFlywayMigrationAndJpaSchemaValidation() {
         Integer successfulMigrations = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history "
-                        + "WHERE version IN ('1', '2', '3') AND success = TRUE",
+                        + "WHERE version IN ('1', '2', '3', '4', '5', '6', '7', '8') AND success = TRUE",
                 Integer.class
         );
 
-        assertThat(successfulMigrations).isEqualTo(3);
+        assertThat(successfulMigrations).isEqualTo(8);
 
         Integer membershipTableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -89,7 +88,6 @@ class AuthProductApiIntegrationTest {
                                   "name": "통합 테스트 사용자",
                                   "email": "%s@example.com",
                                   "storeName": "통합 테스트 매장",
-                                  "timeZone": "Asia/Seoul",
                                   "closingTime": "22:30"
                                 }
                                 """.formatted(accountId, password, accountId)))
@@ -180,8 +178,7 @@ class AuthProductApiIntegrationTest {
                                   "password": "%s",
                                   "name": "대시보드 테스트 사용자",
                                   "email": "%s@example.com",
-                                  "storeName": "대시보드 통합 테스트 매장",
-                                  "timeZone": "Asia/Seoul"
+                                  "storeName": "대시보드 통합 테스트 매장"
                                 }
                                 """.formatted(accountId, password, accountId)))
                 .andExpect(status().isCreated())
@@ -214,14 +211,10 @@ class AuthProductApiIntegrationTest {
                 .andReturn();
         long productId = readBody(productResult).required("id").asLong();
 
-        ZoneId storeZone = ZoneId.of("Asia/Seoul");
-        ZonedDateTime storeNow = ZonedDateTime.now(clock.withZone(storeZone));
+        LocalDateTime storeNow = LocalDateTime.now(clock);
         LocalDate businessDate = storeNow.toLocalDate();
         int businessHour = storeNow.getHour();
-        String soldAt = businessDate.atTime(businessHour, 0)
-                .atZone(storeZone)
-                .toInstant()
-                .toString();
+        String soldAt = businessDate.atTime(businessHour, 0).toString();
         String clientTransactionId = "tx-" + UUID.randomUUID();
 
         MvcResult saleResult = mockMvc.perform(post("/stores/{storeId}/sales/transactions", storeId)

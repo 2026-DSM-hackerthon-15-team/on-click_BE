@@ -6,23 +6,17 @@ import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 import com.onclick.global.security.JwtUserIdResolver;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@RequiredArgsConstructor
 public class StoreAccessValidator {
 
     private final StoreRepository storeRepository;
     private final JwtUserIdResolver userIdResolver;
-
-    public StoreAccessValidator(
-            StoreRepository storeRepository,
-            JwtUserIdResolver userIdResolver
-    ) {
-        this.storeRepository = storeRepository;
-        this.userIdResolver = userIdResolver;
-    }
 
     @Transactional(readOnly = true)
     public Store validate(Jwt jwt, Long storeId) {

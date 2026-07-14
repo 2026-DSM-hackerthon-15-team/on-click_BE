@@ -1,12 +1,12 @@
 package com.onclick.domain.dashboard.dto;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public record TomorrowVisitorsForecastResponse(
         Long storeId,
         LocalDate targetDate,
         long expectedVisitors,
-        Instant generatedAt
+        LocalDateTime generatedAt
 ) {
 }

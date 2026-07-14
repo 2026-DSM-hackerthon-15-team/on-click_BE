@@ -1,6 +1,6 @@
 package com.onclick.domain.sale.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import jakarta.validation.Valid;
@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
 
 public record SaleTransactionCreateRequest(
         @Size(max = 100) String clientTransactionId,
-        @NotNull Instant soldAt,
-        @NotEmpty @Valid List<SaleItemRequest> items
+        @NotNull LocalDateTime soldAt,
+        @NotEmpty @Size(max = 100) @Valid List<SaleItemRequest> items
 ) {
 }

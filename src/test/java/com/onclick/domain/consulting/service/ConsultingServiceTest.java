@@ -1,13 +1,19 @@
 package com.onclick.domain.consulting.service;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
+import com.onclick.domain.auth.entity.User;
+import com.onclick.domain.consulting.TestFieldSetter;
+import com.onclick.domain.consulting.dto.ConsultingCreateRequest;
 import com.onclick.domain.consulting.entity.Consulting;
 import com.onclick.domain.consulting.repository.ConsultingRepository;
+import com.onclick.domain.store.entity.Store;
 import com.onclick.domain.store.service.StoreAccessValidator;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
@@ -17,19 +23,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class ConsultingServiceTest {
 
     private static final Long STORE_ID = 3L;
-    private static final Instant NOW = Instant.parse("2026-07-13T13:00:00Z");
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 7, 13, 22, 0);
+    private static final LocalDate TARGET_DATE = LocalDate.of(2026, 7, 13);
 
     @Mock
     private ConsultingRepository consultingRepository;
@@ -38,13 +47,114 @@ class ConsultingServiceTest {
     private StoreAccessValidator storeAccessValidator;
 
     @Mock
+    private ConsultingJobManager jobManager;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
     private Jwt jwt;
 
     private ConsultingService consultingService;
 
     @BeforeEach
     void setUp() {
-        consultingService = new ConsultingService(consultingRepository, storeAccessValidator);
+        consultingService = serviceAt(NOW);
+    }
+
+    @Test
+    void enqueuesNewConsultingAfterValidatingStoreAndReturnsPendingResource() {
+        Store store = store(LocalDateTime.of(2026, 7, 1, 9, 0));
+        Consulting pending = pendingConsulting(10L);
+        given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(store);
+        given(jobManager.createPending(STORE_ID, TARGET_DATE, NOW))
+                .willReturn(new ConsultingJobRegistration(10L, true));
+        given(consultingRepository.findByIdAndStoreId(10L, STORE_ID))
+                .willReturn(Optional.of(pending));
+
+        ConsultingCreationResult result = consultingService.generate(
+                jwt,
+                STORE_ID,
+                new ConsultingCreateRequest(TARGET_DATE)
+        );
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.consulting().consultingId()).isEqualTo(10L);
+        assertThat(result.consulting().status().name()).isEqualTo("PENDING");
+        verify(eventPublisher).publishEvent(new ConsultingGenerationRequestedEvent(10L));
+    }
+
+    @Test
+    void repeatedRequestReturnsExistingConsultingWithoutDispatchingAnotherJob() {
+        Store store = store(LocalDateTime.of(2026, 7, 1, 9, 0));
+        Consulting completed = completedConsulting(10L);
+        given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(store);
+        given(jobManager.createPending(STORE_ID, TARGET_DATE, NOW))
+                .willReturn(new ConsultingJobRegistration(10L, false));
+        given(consultingRepository.findByIdAndStoreId(10L, STORE_ID))
+                .willReturn(Optional.of(completed));
+
+        ConsultingCreationResult result = consultingService.generate(
+                jwt,
+                STORE_ID,
+                new ConsultingCreateRequest(TARGET_DATE)
+        );
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.consulting().status().name()).isEqualTo("COMPLETED");
+        verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void uniqueConstraintRaceWithSchedulerReturnsWinningResourceIdempotently() {
+        Store store = store(LocalDateTime.of(2026, 7, 1, 9, 0));
+        Consulting raced = pendingConsulting(11L);
+        given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(store);
+        given(jobManager.createPending(STORE_ID, TARGET_DATE, NOW))
+                .willThrow(new DataIntegrityViolationException("unique"));
+        given(consultingRepository.findByStoreIdAndTargetDate(STORE_ID, TARGET_DATE))
+                .willReturn(Optional.of(raced));
+        given(consultingRepository.findByIdAndStoreId(11L, STORE_ID))
+                .willReturn(Optional.of(raced));
+
+        ConsultingCreationResult result = consultingService.generate(
+                jwt,
+                STORE_ID,
+                new ConsultingCreateRequest(TARGET_DATE)
+        );
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.consulting().consultingId()).isEqualTo(11L);
+        verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void kstClosingBoundaryRejectsCurrentDateBeforeClosing() {
+        Store store = store(LocalDateTime.of(2026, 7, 1, 9, 0));
+        ConsultingService beforeClosing = serviceAt(
+                LocalDateTime.of(2026, 7, 13, 21, 59, 59)
+        );
+        given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(store);
+
+        assertThatThrownBy(() -> beforeClosing.generate(
+                jwt,
+                STORE_ID,
+                new ConsultingCreateRequest(TARGET_DATE)
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.FUTURE_DATE_NOT_ALLOWED));
+    }
+
+    @Test
+    void rejectsDateBeforeStoreCreationInKst() {
+        Store store = store(LocalDateTime.of(2026, 7, 13, 0, 30));
+        given(storeAccessValidator.validate(jwt, STORE_ID)).willReturn(store);
+
+        assertThatThrownBy(() -> consultingService.generate(
+                jwt,
+                STORE_ID,
+                new ConsultingCreateRequest(LocalDate.of(2026, 7, 12))
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
     }
 
     @Test
@@ -76,19 +186,48 @@ class ConsultingServiceTest {
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.CONSULTING_NOT_FOUND));
     }
 
+    private ConsultingService serviceAt(LocalDateTime localDateTime) {
+        return new ConsultingService(
+                consultingRepository,
+                storeAccessValidator,
+                jobManager,
+                eventPublisher,
+                fixedClock(localDateTime)
+        );
+    }
+
+    private Store store(LocalDateTime createdAt) {
+        Store store = new Store(
+                new User("owner", "hash"),
+                "강남점"
+        );
+        TestFieldSetter.setField(store, "id", STORE_ID);
+        TestFieldSetter.setField(store, "createdAt", createdAt);
+        return store;
+    }
+
+    private Consulting pendingConsulting(Long id) {
+        Consulting consulting = Consulting.pending(STORE_ID, TARGET_DATE, NOW);
+        TestFieldSetter.setField(consulting, "id", id);
+        return consulting;
+    }
+
     private Consulting completedConsulting(Long id) {
-        Consulting consulting = Consulting.pending(STORE_ID, LocalDate.of(2026, 7, 13), NOW);
-        ReflectionTestUtils.setField(consulting, "id", id);
+        Consulting consulting = pendingConsulting(id);
         consulting.claim(NOW, java.time.Duration.ofMinutes(2), 3);
         consulting.complete(
                 new ConsultingGenerationResult(
                         "일일 분석",
-                        "피크 시간대 인력을 보강하세요.",
-                        NOW
+                        "피크 시간대 인력을 보강하세요."
                 ),
                 NOW,
                 1
         );
         return consulting;
+    }
+
+    private Clock fixedClock(LocalDateTime localDateTime) {
+        ZoneId kst = ZoneId.of("Asia/Seoul");
+        return Clock.fixed(localDateTime.atZone(kst).toInstant(), kst);
     }
 }

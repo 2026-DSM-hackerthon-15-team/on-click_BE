@@ -1,6 +1,6 @@
 package com.onclick.domain.auth.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import com.onclick.domain.auth.entity.User;
 
@@ -9,8 +9,8 @@ public record AccountProfileResponse(
         String accountId,
         String name,
         String email,
-        Instant createdAt,
-        Instant updatedAt
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
 
     public static AccountProfileResponse from(User user) {

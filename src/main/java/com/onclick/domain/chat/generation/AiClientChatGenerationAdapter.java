@@ -1,33 +1,38 @@
 package com.onclick.domain.chat.generation;
 
 import com.onclick.common.ai.AiClient;
-import com.onclick.common.ai.dto.ChatHistoryMessage;
 
+import java.util.List;
+
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 @Component
 @Primary
+@RequiredArgsConstructor
 public class AiClientChatGenerationAdapter implements ChatGenerationPort {
+
+    static final List<String> AVAILABLE_TOOLS = List.of(
+            "sales_analysis",
+            "weather_search",
+            "event_search",
+            "legal_search",
+            "marketing_generation"
+    );
 
     private final AiClient aiClient;
 
-    public AiClientChatGenerationAdapter(AiClient aiClient) {
-        this.aiClient = aiClient;
-    }
-
     @Override
     public String generate(ChatGenerationRequest request) {
-        var history = request.history().stream()
-                .map(item -> new ChatHistoryMessage(item.role().name(), item.content()))
-                .toList();
         var result = aiClient.generateChatReply(
                 new com.onclick.common.ai.dto.ChatGenerationRequest(
+                        request.userId(),
                         request.storeId(),
                         request.chatRoomId(),
-                        request.userMessageId(),
                         request.message(),
-                        history
+                        AVAILABLE_TOOLS,
+                        List.of()
                 )
         );
         return result == null ? null : result.content();

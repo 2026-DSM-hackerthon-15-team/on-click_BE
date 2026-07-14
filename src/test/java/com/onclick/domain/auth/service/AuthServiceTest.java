@@ -1,13 +1,14 @@
 package com.onclick.domain.auth.service;
 
 import java.util.Optional;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import com.onclick.domain.auth.dto.LoginRequest;
 import com.onclick.domain.auth.dto.SignUpRequest;
 import com.onclick.domain.auth.entity.User;
 import com.onclick.domain.auth.repository.UserRepository;
+import com.onclick.domain.store.entity.Industry;
 import com.onclick.domain.store.entity.Store;
 import com.onclick.domain.store.repository.StoreRepository;
 import com.onclick.domain.store.service.StoreInputValidator;
@@ -59,13 +60,13 @@ class AuthServiceTest {
     }
 
     @Test
-    void signUpCreatesUserAndInitialOwnedStoreWithoutToken() {
+    void signUpCreatesInitialStoreFromStoreDetailsAndReturnsServerStoreId() {
         when(userRepository.existsByAccountId("owner01")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("bcrypt-hash");
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
             ReflectionTestUtils.setField(user, "id", 11L);
-            ReflectionTestUtils.setField(user, "createdAt", Instant.parse("2026-07-13T01:00:00Z"));
+            ReflectionTestUtils.setField(user, "createdAt", LocalDateTime.parse("2026-07-13T10:00:00"));
             return user;
         });
         when(storeRepository.save(any(Store.class))).thenAnswer(invocation -> {
@@ -79,7 +80,8 @@ class AuthServiceTest {
                 " 홍길동 ",
                 "OWNER@Example.com",
                 " 1호점 ",
-                null,
+                Industry.CAFE,
+                " 서울 강남구 ",
                 LocalTime.of(23, 30)
         ));
 
@@ -89,8 +91,10 @@ class AuthServiceTest {
         assertThat(response.email()).isEqualTo("owner@example.com");
         assertThat(response.storeId()).isEqualTo(21L);
         assertThat(response.storeName()).isEqualTo("1호점");
+        assertThat(response.industry()).isEqualTo(Industry.CAFE);
+        assertThat(response.roadAddress()).isEqualTo("서울 강남구");
         assertThat(response.closingTime()).isEqualTo(LocalTime.of(23, 30));
-        assertThat(response.createdAt()).isEqualTo(Instant.parse("2026-07-13T01:00:00Z"));
+        assertThat(response.createdAt()).isEqualTo(LocalDateTime.parse("2026-07-13T10:00:00"));
         verify(jwtTokenProvider, never()).issue(any());
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
@@ -103,8 +107,40 @@ class AuthServiceTest {
         ArgumentCaptor<Store> storeCaptor = ArgumentCaptor.forClass(Store.class);
         verify(storeRepository).save(storeCaptor.capture());
         assertThat(storeCaptor.getValue().getOwner()).isSameAs(userCaptor.getValue());
-        assertThat(storeCaptor.getValue().getTimeZone()).isEqualTo("Asia/Seoul");
+        assertThat(storeCaptor.getValue().getIndustry()).isEqualTo(Industry.CAFE);
+        assertThat(storeCaptor.getValue().getRoadAddress()).isEqualTo("서울 강남구");
         assertThat(storeCaptor.getValue().getClosingTime()).isEqualTo(LocalTime.of(23, 30));
+    }
+
+    @Test
+    void signUpDefaultsMissingIndustryAndAllowsNullRoadAddress() {
+        when(userRepository.existsByAccountId("owner01")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("bcrypt-hash");
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            ReflectionTestUtils.setField(user, "id", 11L);
+            return user;
+        });
+        when(storeRepository.save(any(Store.class))).thenAnswer(invocation -> {
+            Store store = invocation.getArgument(0);
+            ReflectionTestUtils.setField(store, "id", 21L);
+            return store;
+        });
+
+        var response = authService.signUp(new SignUpRequest(
+                "owner01",
+                "password123",
+                "홍길동",
+                "owner@example.com",
+                "1호점",
+                null,
+                null,
+                null
+        ));
+
+        assertThat(response.industry()).isEqualTo(Industry.OTHER);
+        assertThat(response.roadAddress()).isNull();
+        assertThat(response.closingTime()).isEqualTo(Store.DEFAULT_CLOSING_TIME);
     }
 
     @Test
@@ -118,6 +154,7 @@ class AuthServiceTest {
                         "홍길동",
                         "owner@example.com",
                         "1호점",
+                        null,
                         null,
                         null
                 )))
@@ -138,6 +175,7 @@ class AuthServiceTest {
                 "홍길동",
                 " OWNER@Example.com ",
                 "1호점",
+                null,
                 null,
                 null
         )))

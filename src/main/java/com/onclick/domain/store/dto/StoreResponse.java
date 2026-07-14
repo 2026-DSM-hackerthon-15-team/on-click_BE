@@ -1,25 +1,28 @@
 package com.onclick.domain.store.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.onclick.domain.store.entity.Industry;
 import com.onclick.domain.store.entity.Store;
 
 public record StoreResponse(
         Long id,
         String name,
-        String timeZone,
+        Industry industry,
+        String roadAddress,
         @JsonFormat(pattern = "HH:mm") LocalTime closingTime,
-        Instant createdAt,
-        Instant updatedAt
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
 
     public static StoreResponse from(Store store) {
         return new StoreResponse(
                 store.getId(),
                 store.getName(),
-                store.getTimeZone(),
+                store.getIndustry(),
+                store.getRoadAddress(),
                 store.getClosingTime(),
                 store.getCreatedAt(),
                 store.getUpdatedAt()

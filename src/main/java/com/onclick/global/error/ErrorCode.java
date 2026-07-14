@@ -1,7 +1,9 @@
 package com.onclick.global.error;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+@Getter
 public enum ErrorCode {
 
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
@@ -9,6 +11,8 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
+    NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 HTTP 메서드입니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     STORE_CONTEXT_MISSING(HttpStatus.FORBIDDEN, "접근 가능한 매장 정보를 확인할 수 없습니다."),
     LOGIN_ID_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 로그인 아이디입니다."),
@@ -28,10 +32,7 @@ public enum ErrorCode {
     MEDIA_STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "이미지를 저장할 수 없습니다."),
     CONSULTING_NOT_FOUND(HttpStatus.NOT_FOUND, "컨설팅 결과를 찾을 수 없습니다."),
     LEGAL_ADVICE_NOT_FOUND(HttpStatus.NOT_FOUND, "법률 조언을 찾을 수 없습니다."),
-    INSTAGRAM_INTEGRATION_NOT_FOUND(HttpStatus.NOT_FOUND, "Instagram 연동 정보를 찾을 수 없습니다."),
-    INSTAGRAM_ALREADY_CONNECTED(HttpStatus.CONFLICT, "Instagram 계정이 이미 연결되어 있습니다."),
-    INVALID_INSTAGRAM_OAUTH_STATE(HttpStatus.BAD_REQUEST, "Instagram OAuth 요청이 만료되었거나 올바르지 않습니다."),
-    INSTAGRAM_PROVIDER_ERROR(HttpStatus.BAD_GATEWAY, "Instagram 서비스를 일시적으로 사용할 수 없습니다."),
+    INSTAGRAM_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Instagram 계정 정보를 찾을 수 없습니다."),
     AUTOMATION_NOT_FOUND(HttpStatus.NOT_FOUND, "자동화 설정을 찾을 수 없습니다."),
     AI_SERVICE_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "AI 서비스를 일시적으로 사용할 수 없습니다."),
     FUTURE_DATE_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "미래 영업일은 조회할 수 없습니다."),
@@ -49,15 +50,7 @@ public enum ErrorCode {
         return status;
     }
 
-    public HttpStatus getStatus() {
-        return status;
-    }
-
     public String defaultMessage() {
-        return defaultMessage;
-    }
-
-    public String getDefaultMessage() {
         return defaultMessage;
     }
 }

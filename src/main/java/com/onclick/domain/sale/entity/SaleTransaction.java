@@ -1,6 +1,6 @@
 package com.onclick.domain.sale.entity;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,6 +12,7 @@ import com.onclick.domain.product.entity.Product;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -20,9 +21,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(
@@ -31,11 +37,28 @@ import jakarta.persistence.UniqueConstraint;
                 name = "uq_sale_transactions_store_client_id",
                 columnNames = {"store_id", "client_transaction_id"}
         ),
-        indexes = @Index(
-                name = "idx_sale_transactions_store_sold_at",
-                columnList = "store_id,sold_at"
-        )
+        indexes = {
+                @Index(
+                        name = "idx_sale_transactions_store_sold_at",
+                        columnList = "store_id,sold_at,id"
+                ),
+                @Index(
+                        name = "idx_sale_transactions_store_created_at_id",
+                        columnList = "store_id,created_at,id"
+                ),
+                @Index(
+                        name = "idx_sale_transactions_store_status_id",
+                        columnList = "store_id,status,id"
+                ),
+                @Index(
+                        name = "idx_sale_transactions_store_transaction_id",
+                        columnList = "store_id,id"
+                )
+        }
 )
+@EntityListeners(AuditingEntityListener.class)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SaleTransaction {
 
     @Id
@@ -49,36 +72,35 @@ public class SaleTransaction {
     private String clientTransactionId;
 
     @Column(name = "sold_at", nullable = false)
-    private Instant soldAt;
+    private LocalDateTime soldAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private SaleStatus status;
 
     @Column(name = "cancelled_at")
-    private Instant cancelledAt;
+    private LocalDateTime cancelledAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    @CreatedDate
+    private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "saleTransaction", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("lineNo ASC")
+    @Getter(AccessLevel.NONE)
     private List<SaleItem> items = new ArrayList<>();
 
-    protected SaleTransaction() {
-    }
-
-    private SaleTransaction(Long storeId, String clientTransactionId, Instant soldAt) {
+    private SaleTransaction(Long storeId, String clientTransactionId, LocalDateTime soldAt) {
         this.storeId = storeId;
         this.clientTransactionId = clientTransactionId;
-        this.soldAt = databaseInstant(soldAt);
+        this.soldAt = databaseDateTime(soldAt);
         this.status = SaleStatus.COMPLETED;
     }
 
     public static SaleTransaction create(
             Long storeId,
             String clientTransactionId,
-            Instant soldAt
+            LocalDateTime soldAt
     ) {
         return new SaleTransaction(storeId, clientTransactionId, soldAt);
     }
@@ -92,17 +114,12 @@ public class SaleTransaction {
         items.add(new SaleItem(this, lineNo, product, quantity, paidAmount));
     }
 
-    public void cancel(Instant cancelledAt) {
+    public void cancel(LocalDateTime cancelledAt) {
         if (status == SaleStatus.CANCELLED) {
             return;
         }
         this.status = SaleStatus.CANCELLED;
-        this.cancelledAt = databaseInstant(cancelledAt);
-    }
-
-    @PrePersist
-    void onCreate() {
-        this.createdAt = databaseInstant(Instant.now());
+        this.cancelledAt = databaseDateTime(cancelledAt);
     }
 
     public long totalPaidAmount() {
@@ -121,40 +138,12 @@ public class SaleTransaction {
         return total;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Long getStoreId() {
-        return storeId;
-    }
-
-    public String getClientTransactionId() {
-        return clientTransactionId;
-    }
-
-    public Instant getSoldAt() {
-        return soldAt;
-    }
-
-    public SaleStatus getStatus() {
-        return status;
-    }
-
-    public Instant getCancelledAt() {
-        return cancelledAt;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
     public List<SaleItem> getItems() {
         return Collections.unmodifiableList(items);
     }
 
-    private static Instant databaseInstant(Instant value) {
-        return Objects.requireNonNull(value, "instant must not be null")
+    private static LocalDateTime databaseDateTime(LocalDateTime value) {
+        return Objects.requireNonNull(value, "dateTime must not be null")
                 .truncatedTo(ChronoUnit.MICROS);
     }
 }

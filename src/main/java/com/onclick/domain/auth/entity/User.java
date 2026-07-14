@@ -1,18 +1,27 @@
 package com.onclick.domain.auth.entity;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
     @Id
@@ -32,13 +41,12 @@ public class User {
     private String email;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    @CreatedDate
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
-    protected User() {
-    }
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
 
     public User(String accountId, String passwordHash) {
         this(accountId, passwordHash, null, null);
@@ -49,18 +57,6 @@ public class User {
         this.passwordHash = passwordHash;
         this.name = name;
         this.email = email;
-    }
-
-    @PrePersist
-    void prePersist() {
-        Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = Instant.now();
     }
 
     public void changePassword(String passwordHash) {
@@ -79,31 +75,4 @@ public class User {
         }
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getAccountId() {
-        return accountId;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
 }

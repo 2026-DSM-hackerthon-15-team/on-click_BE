@@ -6,6 +6,7 @@ import com.onclick.domain.auth.dto.UpdateAccountRequest;
 import com.onclick.domain.auth.service.AccountService;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,13 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/me")
+@RequiredArgsConstructor
 public class AccountController {
 
     private final AccountService accountService;
-
-    public AccountController(AccountService accountService) {
-        this.accountService = accountService;
-    }
 
     @GetMapping
     public AccountProfileResponse getProfile(@AuthenticationPrincipal Jwt jwt) {

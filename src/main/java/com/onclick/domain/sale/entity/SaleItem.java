@@ -13,6 +13,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(
@@ -26,6 +29,8 @@ import jakarta.persistence.UniqueConstraint;
                 columnList = "sale_transaction_id"
         )
 )
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SaleItem {
 
     @Id
@@ -55,9 +60,6 @@ public class SaleItem {
     @Column(name = "paid_amount", nullable = false)
     private long paidAmount;
 
-    protected SaleItem() {
-    }
-
     SaleItem(
             SaleTransaction saleTransaction,
             int lineNo,
@@ -74,35 +76,4 @@ public class SaleItem {
         this.paidAmount = paidAmount;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public SaleTransaction getSaleTransaction() {
-        return saleTransaction;
-    }
-
-    public int getLineNo() {
-        return lineNo;
-    }
-
-    public Product getProduct() {
-        return product;
-    }
-
-    public String getProductNameSnapshot() {
-        return productNameSnapshot;
-    }
-
-    public long getProductPriceSnapshot() {
-        return productPriceSnapshot;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public long getPaidAmount() {
-        return paidAmount;
-    }
 }
