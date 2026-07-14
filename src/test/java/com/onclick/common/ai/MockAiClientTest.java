@@ -5,6 +5,9 @@ import com.onclick.common.ai.dto.ClosingSalesForecastResult;
 import com.onclick.common.ai.dto.ChatGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
+import com.onclick.common.ai.dto.InstagramPublishRequest;
+import com.onclick.common.ai.dto.InstagramPublishStatus;
+import com.onclick.common.ai.dto.SaleTransactionInput;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
 import org.junit.jupiter.api.Test;
@@ -28,7 +31,11 @@ class MockAiClientTest {
     @Test
     void returnsFixedClosingSalesMockWithoutCalculatingForecast() {
         ClosingSalesForecastResult result = mockAiClient.forecastClosingSales(
-                new ClosingSalesForecastRequest(1L, LocalDate.of(2026, 7, 13))
+                new ClosingSalesForecastRequest(
+                        1L,
+                        LocalDateTime.of(2026, 7, 13, 15, 0),
+                        salesData()
+                )
         );
 
         assertThat(result.expectedClosingSales()).isEqualTo(MockAiClient.MOCK_CLOSING_SALES);
@@ -38,7 +45,7 @@ class MockAiClientTest {
     @Test
     void returnsFixedTomorrowVisitorsMockWithoutCalculatingForecast() {
         TomorrowVisitorsForecastResult result = mockAiClient.forecastTomorrowVisitors(
-                new TomorrowVisitorsForecastRequest(1L, LocalDate.of(2026, 7, 14))
+                new TomorrowVisitorsForecastRequest(1L, LocalDate.of(2026, 7, 13), salesData())
         );
 
         assertThat(result.expectedVisitors()).isEqualTo(MockAiClient.MOCK_TOMORROW_VISITORS);
@@ -69,6 +76,19 @@ class MockAiClientTest {
                 "친근하게",
                 null
         ));
+        var publication = mockAiClient.publishInstagram(
+                31L,
+                new InstagramPublishRequest(
+                        9L,
+                        "onclick_store",
+                        "password123!",
+                        "신메뉴 홍보",
+                        List.of("#신메뉴"),
+                        List.of("https://cdn.example.com/menu.jpg"),
+                        "publish-key"
+                ),
+                "jwt"
+        );
 
         assertThat(consulting.title()).isEqualTo("2026-07-13 일일 영업 컨설팅");
         assertThat(consulting.content()).contains("1번 매장", "2026-07-13 영업 데이터");
@@ -77,5 +97,15 @@ class MockAiClientTest {
                 MockAiClient.MOCK_MARKETING_PREFIX + "신메뉴 홍보"
         );
         assertThat(marketing.model()).isEqualTo(MockAiClient.MOCK_MARKETING_MODEL);
+        assertThat(publication.status()).isEqualTo(InstagramPublishStatus.PUBLISHED);
+        assertThat(publication.externalPostId()).isEqualTo("mock-instagram-31");
+    }
+
+    private List<SaleTransactionInput> salesData() {
+        return List.of(new SaleTransactionInput(
+                LocalDateTime.of(2026, 7, 13, 12, 0),
+                10_000L,
+                SaleTransactionInput.Status.COMPLETED
+        ));
     }
 }

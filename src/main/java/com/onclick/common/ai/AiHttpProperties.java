@@ -17,7 +17,6 @@ public class AiHttpProperties {
     private Duration connectTimeout = Duration.ofSeconds(2);
     private Duration readTimeout = Duration.ofSeconds(60);
     private int maxAttempts = 2;
-    private String internalApiKey;
     private final Paths paths = new Paths();
 
     @Getter

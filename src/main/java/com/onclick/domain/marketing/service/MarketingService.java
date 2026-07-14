@@ -1,12 +1,10 @@
 package com.onclick.domain.marketing.service;
 
-import java.time.Clock;
 import java.util.List;
 
 import com.onclick.common.ai.AiClient;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
-import com.onclick.common.time.KoreanTime;
 import com.onclick.domain.marketing.dto.MarketingGenerateRequest;
 import com.onclick.domain.marketing.dto.MarketingResponse;
 import com.onclick.domain.marketing.dto.MarketingUpdateRequest;
@@ -32,7 +30,6 @@ public class MarketingService {
     private final MediaStorageService mediaStorageService;
     private final StoreAccessValidator storeAccessValidator;
     private final AiClient aiClient;
-    private final Clock clock;
 
     @Transactional
     public MarketingResponse generate(Jwt jwt, Long storeId, MarketingGenerateRequest request) {
@@ -99,18 +96,6 @@ public class MarketingService {
             throw new ApiException(ErrorCode.INVALID_REQUEST, exception.getMessage());
         } catch (IllegalStateException exception) {
             throw new ApiException(ErrorCode.MARKETING_STATUS_CONFLICT);
-        }
-        return MarketingResponse.from(marketing, mediaStorageService);
-    }
-
-    @Transactional
-    public MarketingResponse approve(Jwt jwt, Long storeId, Long marketingId) {
-        storeAccessValidator.validate(jwt, storeId);
-        MarketingContent marketing = find(storeId, marketingId);
-        try {
-            marketing.approve(KoreanTime.now(clock));
-        } catch (IllegalStateException exception) {
-            throw new ApiException(ErrorCode.MARKETING_STATUS_CONFLICT, exception.getMessage());
         }
         return MarketingResponse.from(marketing, mediaStorageService);
     }

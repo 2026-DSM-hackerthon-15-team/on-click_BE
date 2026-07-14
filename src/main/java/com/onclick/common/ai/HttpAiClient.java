@@ -179,10 +179,10 @@ public class HttpAiClient implements AiClient {
                     marketingId,
                     request
             );
-            InstagramPublishResult response = restClient.post()
+                InstagramPublishResult response = restClient.post()
                     .uri(path, Map.of("marketingId", marketingId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .headers(headers -> headers.setBearerAuth(bearerToken))
+                    .headers(headers -> applyAuthorizationHeader(headers, bearerToken))
                     .body(serializeRequest(request))
                     .retrieve()
                     .body(InstagramPublishResult.class);
@@ -521,12 +521,12 @@ public class HttpAiClient implements AiClient {
                         request
                 );
                 T response = restClient.post()
-                        .uri(path)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .headers(headers -> applyInternalApiKey(path, headers))
-                        .body(serializeRequest(request))
-                        .retrieve()
-                        .body(responseType);
+                    .uri(path)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> applyAuthorizationHeader(headers, null))
+                    .body(serializeRequest(request))
+                    .retrieve()
+                    .body(responseType);
                 log.info(
                         "AI response received: path={}, attempt={}/{}, response={}",
                         path,
@@ -635,18 +635,31 @@ public class HttpAiClient implements AiClient {
         }
     }
 
-    private void applyInternalApiKey(String path, org.springframework.http.HttpHeaders headers) {
-        if (!requiresInternalApiKey(path)) {
-            return;
+    private void applyAuthorizationHeader(org.springframework.http.HttpHeaders headers, String explicitBearerToken) {
+        String token = explicitBearerToken != null ? explicitBearerToken : currentBearerToken();
+        if (token != null) {
+            headers.setBearerAuth(token);
         }
-        String internalApiKey = requireSetting(properties.getInternalApiKey(), "AI_INTERNAL_API_KEY");
-        headers.set("X-Internal-Api-Key", internalApiKey);
     }
 
-    private boolean requiresInternalApiKey(String path) {
-        return Objects.equals(path, properties.getPaths().getClosingSales())
-                || Objects.equals(path, properties.getPaths().getTomorrowVisitors())
-                || Objects.equals(path, properties.getPaths().getMarketing());
+    private String currentBearerToken() {
+        try {
+            var context = org.springframework.security.core.context.SecurityContextHolder.getContext();
+            if (context == null) return null;
+            var auth = context.getAuthentication();
+            if (auth == null) return null;
+            Object principal = auth.getPrincipal();
+            if (principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+                return jwt.getTokenValue();
+            }
+            Object credentials = auth.getCredentials();
+            if (credentials instanceof String s && !s.isBlank()) {
+                return s;
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String responseBodyPreview(RestClientResponseException exception) {

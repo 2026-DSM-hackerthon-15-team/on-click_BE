@@ -148,6 +148,9 @@ public class MarketingContent {
         if (mediaFiles.isEmpty()) {
             throw new IllegalStateException("At least one media file is required");
         }
+        if (status == MarketingStatus.FAILED) {
+            idempotencyKey = UUID.randomUUID().toString();
+        }
         status = MarketingStatus.APPROVED;
         approvedAt = approvedAt == null ? now : approvedAt;
         nextPublishAt = null;
@@ -160,11 +163,14 @@ public class MarketingContent {
         }
         status = MarketingStatus.PUBLISHING;
         publishAttemptCount++;
-        nextPublishAt = now.plusSeconds(300);
+        nextPublishAt = null;
         failureReason = null;
     }
 
     public void markPublished(String externalPostId, String publishedUrl, LocalDateTime publishedAt) {
+        if (status != MarketingStatus.PUBLISHING) {
+            throw new IllegalStateException("Marketing content is not being published");
+        }
         status = MarketingStatus.PUBLISHED;
         this.externalPostId = externalPostId;
         this.publishedUrl = publishedUrl;

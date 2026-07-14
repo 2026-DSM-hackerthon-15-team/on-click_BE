@@ -9,6 +9,7 @@ import javax.crypto.spec.SecretKeySpec;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -38,7 +39,7 @@ public class SecurityConfig {
             HttpSecurity http,
             JsonAuthenticationEntryPoint authenticationEntryPoint,
             JsonAccessDeniedHandler accessDeniedHandler,
-            CorsConfigurationSource corsConfigurationSource
+            @Qualifier("corsConfigurationSource") CorsConfigurationSource corsConfigurationSource
     ) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))

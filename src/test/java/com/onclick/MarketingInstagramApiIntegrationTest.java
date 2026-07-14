@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,7 +30,7 @@ class MarketingInstagramApiIntegrationTest {
     @Autowired ObjectMapper objectMapper;
 
     @Test
-    void generatesAndApprovesMarketingContentWithoutOAuthPublishing() throws Exception {
+    void approvalPublishesMarketingContentThroughConfiguredAiClient() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         MvcResult signup = mockMvc.perform(post("/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -46,6 +47,14 @@ class MarketingInstagramApiIntegrationTest {
                 .andReturn();
         long storeId = body(signup).required("storeId").asLong();
         String authorization = "Bearer " + login("marketing-" + suffix, "password123!");
+
+        mockMvc.perform(put("/stores/{storeId}/instagram-account", storeId)
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountId":"onclick_store","password":"instagram-password"}
+                                """))
+                .andExpect(status().isOk());
 
         MockMultipartFile image = new MockMultipartFile(
                 "file",
@@ -80,14 +89,19 @@ class MarketingInstagramApiIntegrationTest {
         mockMvc.perform(post("/stores/{storeId}/marketings/{marketingId}/approve", storeId, marketingId)
                         .header("Authorization", authorization))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("APPROVED"));
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.publishAttemptCount").value(1))
+                .andExpect(jsonPath("$.externalPostId").value("mock-instagram-" + marketingId))
+                .andExpect(jsonPath("$.publishedUrl")
+                        .value("https://www.instagram.com/p/mock-" + marketingId));
 
         mockMvc.perform(get("/stores/{storeId}/marketings/{marketingId}", storeId, marketingId)
                         .header("Authorization", authorization))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("APPROVED"))
-                .andExpect(jsonPath("$.externalPostId").isEmpty())
-                .andExpect(jsonPath("$.publishedUrl").isEmpty());
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.externalPostId").value("mock-instagram-" + marketingId))
+                .andExpect(jsonPath("$.publishedUrl")
+                        .value("https://www.instagram.com/p/mock-" + marketingId));
     }
 
     private String login(String accountId, String password) throws Exception {

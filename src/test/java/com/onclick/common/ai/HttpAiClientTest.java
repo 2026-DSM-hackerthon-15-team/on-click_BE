@@ -46,7 +46,6 @@ class HttpAiClientTest {
         properties = new AiHttpProperties();
         properties.setBaseUrl("https://ai.example.test");
         properties.setMaxAttempts(3);
-        properties.setInternalApiKey("internal-api-key");
         restClientBuilder = RestClient.builder().baseUrl(properties.getBaseUrl());
         server = MockRestServiceServer.bindTo(restClientBuilder).build();
     }
@@ -57,7 +56,7 @@ class HttpAiClientTest {
                         "https://ai.example.test/ai/forecasts/closing-sales"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(header("X-Internal-Api-Key", "internal-api-key"))
+                
                 .andExpect(content().json("""
                         {
                           "storeId": 5,
@@ -107,7 +106,6 @@ class HttpAiClientTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(header("Authorization", "Bearer approving-user-jwt"))
-                .andExpect(headerDoesNotExist("X-Internal-Api-Key"))
                 .andExpect(jsonPath("$.userId").value(7))
                 .andExpect(jsonPath("$.instagramUsername").value("onclick_store"))
                 .andExpect(jsonPath("$.instagramPassword").value("password123!"))
@@ -152,7 +150,7 @@ class HttpAiClientTest {
         server.expect(once(), requestTo("https://ai.example.test/ai/marketings/copy"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(header("X-Internal-Api-Key", "internal-api-key"))
+                
                 .andRespond(withSuccess(
                         "{\"content\":\"완성된 문구\",\"model\":\"test-model\"}",
                         MediaType.APPLICATION_JSON
@@ -182,7 +180,7 @@ class HttpAiClientTest {
         server.expect(once(), requestTo("https://ai.example.test/ai/marketings/copy"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(header("X-Internal-Api-Key", "internal-api-key"))
+                
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST)
                         .body("{\"errorCode\":\"INVALID_PROMPT\",\"message\":\"bad request\"}")
                         .contentType(MediaType.APPLICATION_JSON));

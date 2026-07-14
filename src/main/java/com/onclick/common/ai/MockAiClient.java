@@ -8,6 +8,9 @@ import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
+import com.onclick.common.ai.dto.InstagramPublishRequest;
+import com.onclick.common.ai.dto.InstagramPublishResult;
+import com.onclick.common.ai.dto.InstagramPublishStatus;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +69,28 @@ public class MockAiClient implements AiClient {
         return new MarketingGenerationResult(
                 MOCK_MARKETING_PREFIX + request.draftText(),
                 MOCK_MARKETING_MODEL
+        );
+    }
+
+    @Override
+    public InstagramPublishResult publishInstagram(
+            Long marketingId,
+            InstagramPublishRequest request,
+            String bearerToken
+    ) {
+        Objects.requireNonNull(marketingId, "marketingId must not be null");
+        Objects.requireNonNull(request, "request must not be null");
+        if (bearerToken == null || bearerToken.isBlank()) {
+            throw new IllegalArgumentException("bearerToken must not be blank");
+        }
+        return new InstagramPublishResult(
+                marketingId,
+                "INSTAGRAM",
+                InstagramPublishStatus.PUBLISHED,
+                "mock-instagram-" + marketingId,
+                "https://www.instagram.com/p/mock-" + marketingId,
+                now(),
+                null
         );
     }
 

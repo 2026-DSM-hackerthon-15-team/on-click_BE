@@ -8,6 +8,8 @@ import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationResult;
+import com.onclick.common.ai.dto.InstagramPublishRequest;
+import com.onclick.common.ai.dto.InstagramPublishResult;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastRequest;
 import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
 
@@ -22,4 +24,10 @@ public interface AiClient {
     ChatGenerationResult generateChatReply(ChatGenerationRequest request);
 
     MarketingGenerationResult generateMarketing(MarketingGenerationRequest request);
+
+    InstagramPublishResult publishInstagram(
+            Long marketingId,
+            InstagramPublishRequest request,
+            String bearerToken
+    );
 }

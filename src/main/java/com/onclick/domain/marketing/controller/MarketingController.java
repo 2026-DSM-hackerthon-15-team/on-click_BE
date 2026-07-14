@@ -6,6 +6,7 @@ import com.onclick.domain.marketing.dto.MarketingGenerateRequest;
 import com.onclick.domain.marketing.dto.MarketingResponse;
 import com.onclick.domain.marketing.dto.MarketingUpdateRequest;
 import com.onclick.domain.marketing.service.MarketingService;
+import com.onclick.domain.marketing.service.MarketingPublishingService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MarketingController {
 
     private final MarketingService marketingService;
+    private final MarketingPublishingService marketingPublishingService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -72,6 +74,6 @@ public class MarketingController {
             @PathVariable Long storeId,
             @PathVariable Long marketingId
     ) {
-        return marketingService.approve(jwt, storeId, marketingId);
+        return marketingPublishingService.approveAndPublish(jwt, storeId, marketingId);
     }
 }

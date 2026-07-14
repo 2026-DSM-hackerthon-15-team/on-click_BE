@@ -24,6 +24,8 @@ import com.onclick.domain.sale.entity.SaleStatus;
 import com.onclick.domain.sale.entity.SaleTransaction;
 import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.domain.store.service.StoreAccessValidator;
+import com.onclick.global.error.ApiException;
+import com.onclick.global.error.ErrorCode;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -127,6 +129,7 @@ public class DashboardService {
                         businessDate.atStartOfDay(),
                         asOf
                 );
+        requirePosData(transactions);
         long observedSales = totalSales(transactions.stream()
                 .filter(transaction -> transaction.getStatus() == SaleStatus.COMPLETED)
                 .toList());
@@ -152,6 +155,7 @@ public class DashboardService {
                         storeId,
                         targetDate.atStartOfDay()
                 );
+        requirePosData(transactions);
         TomorrowVisitorsForecastResult result = aiClient.forecastTomorrowVisitors(
                 new TomorrowVisitorsForecastRequest(storeId, baseDate, toAiSalesData(transactions))
         );
@@ -199,6 +203,12 @@ public class DashboardService {
                         SaleTransactionInput.Status.valueOf(transaction.getStatus().name())
                 ))
                 .toList();
+    }
+
+    private void requirePosData(List<SaleTransaction> transactions) {
+        if (transactions.isEmpty()) {
+            throw new ApiException(ErrorCode.POS_DATA_NOT_FOUND);
+        }
     }
 
     private long sum(long[] values) {

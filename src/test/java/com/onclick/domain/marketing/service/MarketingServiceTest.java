@@ -1,8 +1,5 @@
 package com.onclick.domain.marketing.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 
 import com.onclick.common.ai.AiClient;
@@ -52,8 +49,7 @@ class MarketingServiceTest {
                 repository,
                 mediaStorageService,
                 storeAccessValidator,
-                aiClient,
-                Clock.fixed(Instant.parse("2026-07-14T07:00:00Z"), ZoneOffset.UTC)
+                aiClient
         );
     }
 

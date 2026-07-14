@@ -19,16 +19,21 @@ import com.onclick.domain.sale.entity.SaleTransaction;
 import com.onclick.domain.sale.repository.SaleTransactionRepository;
 import com.onclick.domain.store.entity.Store;
 import com.onclick.domain.store.service.StoreAccessValidator;
+import com.onclick.global.error.ApiException;
+import com.onclick.global.error.ErrorCode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -142,19 +147,21 @@ class DashboardServiceTest {
     @Test
     void forecastsKeepPublicContractAndUseCompletedTransactionSales() {
         LocalDateTime generatedAt = LocalDateTime.parse("2026-07-13T15:00:30");
-        givenTransactionsForToday(List.of(
+        List<SaleTransaction> transactions = List.of(
                 completedTransaction("TX-1", atHour(9, 10), item(1, 2, 8_000)),
                 completedTransaction("TX-2", atHour(10, 5), item(1, 1, 2_000)),
                 cancelledTransaction("TX-3", atHour(11, 0), item(1, 1, 90_000))
-        ));
-        ClosingSalesForecastRequest closingRequest = new ClosingSalesForecastRequest(STORE_ID, BUSINESS_DATE);
-        TomorrowVisitorsForecastRequest visitorsRequest = new TomorrowVisitorsForecastRequest(
-                STORE_ID,
-                BUSINESS_DATE.plusDays(1)
         );
-        given(aiClient.forecastClosingSales(closingRequest))
+        given(saleTransactionRepository
+                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanEqualOrderBySoldAtAsc(
+                        STORE_ID, DAY_START, NOW))
+                .willReturn(transactions);
+        given(saleTransactionRepository.findAllByStoreIdAndSoldAtLessThanOrderBySoldAtAsc(
+                STORE_ID, DAY_END))
+                .willReturn(transactions);
+        given(aiClient.forecastClosingSales(any(ClosingSalesForecastRequest.class)))
                 .willReturn(new ClosingSalesForecastResult(25_000, generatedAt));
-        given(aiClient.forecastTomorrowVisitors(visitorsRequest))
+        given(aiClient.forecastTomorrowVisitors(any(TomorrowVisitorsForecastRequest.class)))
                 .willReturn(new TomorrowVisitorsForecastResult(120, generatedAt));
 
         var closing = dashboardService.getClosingSalesForecast(jwt, STORE_ID);
@@ -166,8 +173,34 @@ class DashboardServiceTest {
         assertThat(visitors.targetDate()).isEqualTo(BUSINESS_DATE.plusDays(1));
         assertThat(visitors.expectedVisitors()).isEqualTo(120);
         assertThat(visitors.generatedAt()).isEqualTo(generatedAt);
-        verify(aiClient).forecastClosingSales(closingRequest);
-        verify(aiClient).forecastTomorrowVisitors(visitorsRequest);
+        ArgumentCaptor<ClosingSalesForecastRequest> closingCaptor =
+                ArgumentCaptor.forClass(ClosingSalesForecastRequest.class);
+        ArgumentCaptor<TomorrowVisitorsForecastRequest> visitorsCaptor =
+                ArgumentCaptor.forClass(TomorrowVisitorsForecastRequest.class);
+        verify(aiClient).forecastClosingSales(closingCaptor.capture());
+        verify(aiClient).forecastTomorrowVisitors(visitorsCaptor.capture());
+        assertThat(closingCaptor.getValue().asOf()).isEqualTo(NOW);
+        assertThat(closingCaptor.getValue().salesData()).hasSize(3);
+        assertThat(visitorsCaptor.getValue().baseDate()).isEqualTo(BUSINESS_DATE);
+        assertThat(visitorsCaptor.getValue().salesData()).hasSize(3);
+    }
+
+    @Test
+    void returnsNotFoundWhenForecastHasNoPosData() {
+        given(saleTransactionRepository
+                .findAllByStoreIdAndSoldAtGreaterThanEqualAndSoldAtLessThanEqualOrderBySoldAtAsc(
+                        STORE_ID, DAY_START, NOW))
+                .willReturn(List.of());
+        given(saleTransactionRepository.findAllByStoreIdAndSoldAtLessThanOrderBySoldAtAsc(
+                STORE_ID, DAY_END))
+                .willReturn(List.of());
+
+        assertThatThrownBy(() -> dashboardService.getClosingSalesForecast(jwt, STORE_ID))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.POS_DATA_NOT_FOUND));
+        assertThatThrownBy(() -> dashboardService.getTomorrowVisitorsForecast(jwt, STORE_ID))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.POS_DATA_NOT_FOUND));
     }
 
     private void givenTransactionsForToday(List<SaleTransaction> transactions) {
