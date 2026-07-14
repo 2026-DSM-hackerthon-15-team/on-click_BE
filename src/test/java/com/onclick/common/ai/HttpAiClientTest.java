@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.onclick.common.ai.dto.ChatGenerationRequest;
 import com.onclick.common.ai.dto.ClosingSalesForecastRequest;
+import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.MarketingGenerationRequest;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
@@ -20,6 +21,7 @@ import org.springframework.web.client.RestClient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -51,6 +53,7 @@ class HttpAiClientTest {
         server.expect(once(), requestTo("https://ai.example.test/ai/forecasts/closing-sales"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-Internal-Api-Key", "internal-secret"))
+                .andExpect(jsonPath("$.businessDate").value("2026-07-13"))
                 .andRespond(withSuccess(
                         "{\"expectedClosingSales\":750000,\"generatedAt\":\"2026-07-13T13:00:00Z\"}",
                         MediaType.APPLICATION_JSON
@@ -103,6 +106,99 @@ class HttpAiClientTest {
         ));
 
         assertThat(result.content()).isEqualTo("평일 저녁 매출 하락이 가장 큰 원인입니다.");
+        server.verify();
+    }
+
+    @Test
+    void postsDailyConsultingUsingDocumentedAiContract() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/consultings/daily"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Internal-Api-Key", "internal-secret"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.userId").value(9))
+                .andExpect(jsonPath("$.storeId").value(3))
+                .andExpect(jsonPath("$.targetDate").value("2026-07-13"))
+                .andExpect(jsonPath("$.reportFormat").value("DAILY_V1"))
+                .andExpect(jsonPath("$.consultingId").doesNotExist())
+                .andExpect(jsonPath("$.salesData").doesNotExist())
+                .andRespond(withSuccess(
+                        """
+                        {
+                          "title":"2026-07-13 일일 컨설팅",
+                          "targetDate":"2026-07-13",
+                          "summary":"평일 저녁 매출이 감소했습니다.",
+                          "content":"## 오늘의 요약\\n평일 저녁 매출이 감소했습니다.",
+                          "chatInsights":[],
+                          "keyMetrics":[],
+                          "externalFactors":[],
+                          "estimatedCauses":[],
+                          "recommendations":[],
+                          "warnings":[],
+                          "usedTools":[],
+                          "citations":[],
+                          "model":"test-model"
+                        }
+                        """,
+                        MediaType.APPLICATION_JSON
+                ));
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+
+        var result = client.generateDailyConsulting(new ConsultingGenerationRequest(
+                9L,
+                3L,
+                LocalDate.of(2026, 7, 13),
+                ConsultingGenerationRequest.DAILY_V1
+        ));
+
+        assertThat(result.title()).isEqualTo("2026-07-13 일일 컨설팅");
+        assertThat(result.content()).startsWith("## 오늘의 요약");
+        server.verify();
+    }
+
+    @Test
+    void mapsMismatchedDailyConsultingDateToServiceUnavailable() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/consultings/daily"))
+                .andRespond(withSuccess(
+                        """
+                        {
+                          "title":"일일 컨설팅",
+                          "targetDate":"2026-07-12",
+                          "summary":"요약",
+                          "content":"본문"
+                        }
+                        """,
+                        MediaType.APPLICATION_JSON
+                ));
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+
+        assertThatThrownBy(() -> client.generateDailyConsulting(new ConsultingGenerationRequest(
+                9L,
+                3L,
+                LocalDate.of(2026, 7, 13),
+                ConsultingGenerationRequest.DAILY_V1
+        ))).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
+        server.verify();
+    }
+
+    @Test
+    void mapsIncompleteSuccessfulChatPayloadToServiceUnavailable() {
+        server.expect(once(), requestTo("https://ai.example.test/ai/chat"))
+                .andRespond(withSuccess(
+                        "{\"answer\":\"응답\",\"usedTools\":[]}",
+                        MediaType.APPLICATION_JSON
+                ));
+        HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
+
+        assertThatThrownBy(() -> client.generateChatReply(new ChatGenerationRequest(
+                9L,
+                3L,
+                12L,
+                "질문",
+                List.of("sales_analysis"),
+                List.of()
+        ))).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
         server.verify();
     }
 

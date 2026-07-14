@@ -27,7 +27,7 @@ public class AiHttpProperties {
 
         private String closingSales = "/ai/forecasts/closing-sales";
         private String tomorrowVisitors = "/ai/forecasts/tomorrow-visitors";
-        private String consulting = "/ai/consultings";
+        private String dailyConsulting = "/ai/consultings/daily";
         private String chat = "/ai/chat";
         private String marketing = "/ai/marketing/generations";
 

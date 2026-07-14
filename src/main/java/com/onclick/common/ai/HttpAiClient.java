@@ -2,8 +2,12 @@ package com.onclick.common.ai;
 
 import java.net.http.HttpClient;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
@@ -22,6 +26,7 @@ import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -35,9 +40,19 @@ import org.springframework.web.client.RestClientResponseException;
 @Slf4j
 public class HttpAiClient implements AiClient {
 
+    private static final Set<String> CHAT_FINISH_REASONS = Set.of(
+            "STOP",
+            "TOOL_ERROR",
+            "MAX_TOKENS",
+            "SAFETY"
+    );
+    private static final Set<String> TOOL_STATUSES = Set.of("SUCCESS", "FAILED", "SKIPPED");
+    private static final Set<String> RECOMMENDATION_PRIORITIES = Set.of("HIGH", "MEDIUM", "LOW");
+
     private final RestClient restClient;
     private final AiHttpProperties properties;
 
+    @Autowired
     public HttpAiClient(AiHttpProperties properties) {
         this(properties, createRestClient(properties));
     }
@@ -80,14 +95,15 @@ public class HttpAiClient implements AiClient {
     }
 
     @Override
-    public ConsultingGenerationResult generateConsulting(ConsultingGenerationRequest request) {
-        String path = properties.getPaths().getConsulting();
+    public ConsultingGenerationResult generateDailyConsulting(ConsultingGenerationRequest request) {
+        String path = properties.getPaths().getDailyConsulting();
         return mapResponse(path, () -> {
             ConsultingGenerationWireResponse response = post(
                     path,
                     request,
                     ConsultingGenerationWireResponse.class
             );
+            validateDailyConsultingResponse(request, response);
             return new ConsultingGenerationResult(response.title(), response.content());
         });
     }
@@ -101,6 +117,7 @@ public class HttpAiClient implements AiClient {
                     request,
                     ChatGenerationWireResponse.class
             );
+            validateChatResponse(response);
             return new ChatGenerationResult(response.answer());
         });
     }
@@ -130,6 +147,114 @@ public class HttpAiClient implements AiClient {
             throw new IllegalArgumentException(field + " must be non-negative");
         }
         return value;
+    }
+
+    private void validateChatResponse(ChatGenerationWireResponse response) {
+        requireText(response.model(), "model");
+        requireEnum(response.finishReason(), CHAT_FINISH_REASONS, "finishReason");
+        validateToolExecutions(requireList(response.usedTools(), "usedTools"));
+        if (response.citations() != null) {
+            validateCitations(response.citations());
+        }
+    }
+
+    private void validateDailyConsultingResponse(
+            ConsultingGenerationRequest request,
+            ConsultingGenerationWireResponse response
+    ) {
+        if (!request.targetDate().equals(response.targetDate())) {
+            throw new IllegalArgumentException("targetDate does not match the request");
+        }
+        requireText(response.summary(), "summary");
+        requireText(response.model(), "model");
+        requireList(response.chatInsights(), "chatInsights");
+        requireList(response.externalFactors(), "externalFactors");
+        requireList(response.warnings(), "warnings");
+        validateMetrics(requireList(response.keyMetrics(), "keyMetrics"));
+        validateCauses(requireList(response.estimatedCauses(), "estimatedCauses"));
+        validateRecommendations(requireList(response.recommendations(), "recommendations"));
+        validateToolExecutions(requireList(response.usedTools(), "usedTools"));
+        validateCitations(requireList(response.citations(), "citations"));
+    }
+
+    private void validateToolExecutions(List<AiToolExecutionWireResponse> executions) {
+        for (AiToolExecutionWireResponse execution : executions) {
+            if (execution == null) {
+                throw new IllegalArgumentException("usedTools must not contain null");
+            }
+            requireText(execution.toolName(), "usedTools.toolName");
+            requireEnum(execution.status(), TOOL_STATUSES, "usedTools.status");
+            if (execution.latencyMs() != null && execution.latencyMs() < 0) {
+                throw new IllegalArgumentException("usedTools.latencyMs must be non-negative");
+            }
+        }
+    }
+
+    private void validateCitations(List<AiCitationWireResponse> citations) {
+        for (AiCitationWireResponse citation : citations) {
+            if (citation == null) {
+                throw new IllegalArgumentException("citations must not contain null");
+            }
+            requireText(citation.title(), "citations.title");
+            requireText(citation.url(), "citations.url");
+        }
+    }
+
+    private void validateMetrics(List<ConsultingMetricWireResponse> metrics) {
+        for (ConsultingMetricWireResponse metric : metrics) {
+            if (metric == null || metric.currentValue() == null) {
+                throw new IllegalArgumentException("keyMetrics values must not be null");
+            }
+            requireText(metric.metricName(), "keyMetrics.metricName");
+            requireText(metric.unit(), "keyMetrics.unit");
+        }
+    }
+
+    private void validateCauses(List<ConsultingCauseWireResponse> causes) {
+        for (ConsultingCauseWireResponse cause : causes) {
+            if (cause == null || cause.confidence() == null
+                    || cause.confidence() < 0 || cause.confidence() > 1) {
+                throw new IllegalArgumentException("estimatedCauses.confidence must be between 0 and 1");
+            }
+            requireText(cause.title(), "estimatedCauses.title");
+            requireText(cause.description(), "estimatedCauses.description");
+            requireList(cause.evidence(), "estimatedCauses.evidence");
+        }
+    }
+
+    private void validateRecommendations(List<ConsultingRecommendationWireResponse> recommendations) {
+        for (ConsultingRecommendationWireResponse recommendation : recommendations) {
+            if (recommendation == null) {
+                throw new IllegalArgumentException("recommendations must not contain null");
+            }
+            requireEnum(
+                    recommendation.priority(),
+                    RECOMMENDATION_PRIORITIES,
+                    "recommendations.priority"
+            );
+            requireText(recommendation.title(), "recommendations.title");
+            requireText(recommendation.description(), "recommendations.description");
+        }
+    }
+
+    private <T> List<T> requireList(List<T> value, String field) {
+        if (value == null) {
+            throw new IllegalArgumentException(field + " must not be null");
+        }
+        return value;
+    }
+
+    private String requireText(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+        return value.trim();
+    }
+
+    private void requireEnum(String value, Set<String> allowed, String field) {
+        if (value == null || !allowed.contains(value)) {
+            throw new IllegalArgumentException(field + " is invalid");
+        }
     }
 
     private <T> T mapResponse(String path, Supplier<T> mapper) {
@@ -249,15 +374,69 @@ public class HttpAiClient implements AiClient {
 
     private record ConsultingGenerationWireResponse(
             String title,
-            @JsonAlias("summary") String content
+            LocalDate targetDate,
+            String summary,
+            String content,
+            List<String> chatInsights,
+            List<ConsultingMetricWireResponse> keyMetrics,
+            List<String> externalFactors,
+            List<ConsultingCauseWireResponse> estimatedCauses,
+            List<ConsultingRecommendationWireResponse> recommendations,
+            List<String> warnings,
+            List<AiToolExecutionWireResponse> usedTools,
+            List<AiCitationWireResponse> citations,
+            String model
     ) {
     }
 
-    private record ChatGenerationWireResponse(@JsonAlias("content") String answer) {
+    private record ChatGenerationWireResponse(
+            @JsonAlias("content") String answer,
+            List<AiToolExecutionWireResponse> usedTools,
+            List<AiCitationWireResponse> citations,
+            String model,
+            String finishReason
+    ) {
     }
 
     private record MarketingGenerationWireResponse(
             @JsonAlias({"caption", "answer"}) String content
+    ) {
+    }
+
+    private record AiToolExecutionWireResponse(
+            String toolName,
+            String status,
+            Map<String, Object> arguments,
+            String resultSummary,
+            Long latencyMs
+    ) {
+    }
+
+    private record AiCitationWireResponse(String title, String url, String organization) {
+    }
+
+    private record ConsultingMetricWireResponse(
+            String metricName,
+            Double currentValue,
+            Double previousValue,
+            Double changeRate,
+            String unit
+    ) {
+    }
+
+    private record ConsultingCauseWireResponse(
+            String title,
+            String description,
+            Double confidence,
+            List<String> evidence
+    ) {
+    }
+
+    private record ConsultingRecommendationWireResponse(
+            String priority,
+            String title,
+            String description,
+            String expectedEffect
     ) {
     }
 }

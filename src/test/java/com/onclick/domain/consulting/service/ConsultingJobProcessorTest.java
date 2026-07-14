@@ -5,7 +5,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.List;
 import java.util.Optional;
 
 import com.onclick.common.ai.AiClient;
@@ -68,7 +67,7 @@ class ConsultingJobProcessorTest {
         given(jobManager.claim(10L, NOW, Duration.ofMinutes(2), 3))
                 .willReturn(Optional.of(claim));
         given(requestFactory.create(claim)).willReturn(request);
-        given(aiClient.generateConsulting(request)).willReturn(result);
+        given(aiClient.generateDailyConsulting(request)).willReturn(result);
 
         processor.process(10L);
 
@@ -82,7 +81,7 @@ class ConsultingJobProcessorTest {
         given(jobManager.claim(10L, NOW, Duration.ofMinutes(2), 3))
                 .willReturn(Optional.of(claim));
         given(requestFactory.create(claim)).willReturn(request);
-        given(aiClient.generateConsulting(request))
+        given(aiClient.generateDailyConsulting(request))
                 .willThrow(new ApiException(ErrorCode.AI_SERVICE_UNAVAILABLE));
 
         processor.process(10L);
@@ -112,16 +111,10 @@ class ConsultingJobProcessorTest {
 
     private ConsultingGenerationRequest request(ConsultingJobClaim claim) {
         return new ConsultingGenerationRequest(
-                claim.consultingId(),
+                9L,
                 claim.storeId(),
-                "강남점",
                 claim.targetDate(),
-                0,
-                0,
-                0,
-                0,
-                List.of(),
-                List.of()
+                ConsultingGenerationRequest.DAILY_V1
         );
     }
 

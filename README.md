@@ -24,7 +24,7 @@ docker compose up -d --build
 
 - 데이터베이스: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - 보안: `JWT_SECRET`(32바이트 이상), `CORS_ALLOWED_ORIGINS`
-- AI 실연동: `AI_PROVIDER=http`, `AI_BASE_URL`, `AI_INTERNAL_API_KEY`, timeout 및 기능별 path
+- AI 실연동: `AI_PROVIDER=http`, `AI_BASE_URL`, `AI_INTERNAL_API_KEY`, timeout 및 기능별 path (`AI_CHAT_PATH`, `AI_DAILY_CONSULTING_PATH` 등)
 - 미디어: `MEDIA_PUBLIC_BASE_URL`
 
 업로드 이미지는 Docker의 `media-data` 볼륨에 보존됩니다. JPEG/PNG MIME·signature·실제 디코딩 가능 여부·해상도를 검증하며, 콘텐츠에 연결되지 않았거나 DB에 기록되지 않은 파일은 24시간 후 정리됩니다.
@@ -69,7 +69,7 @@ docker compose up -d --build
 
 메시지 전송은 사용자 메시지와 `PENDING` AI 메시지를 저장한 뒤 `202 Accepted`를 반환합니다. 선택적 `clientMessageId`를 보내면 네트워크 재전송에도 같은 사용자·AI 메시지 쌍을 반환합니다. 커밋 후 비동기 worker가 AI 서버의 `POST /ai/chat`을 호출하고 결과를 같은 assistant 메시지에 반영합니다. 프론트는 응답받은 `assistantMessage.id`를 `afterId`로 polling해도 같은 메시지의 최신 `PENDING`, `COMPLETED`, `FAILED` 상태를 조회할 수 있습니다.
 
-기본 `AI_PROVIDER=mock`에서는 외부 AI HTTP 요청을 보내지 않고 프로세스 내부 mock 응답을 사용합니다. 실제 AI 서버를 호출하려면 `AI_PROVIDER=http`, `AI_BASE_URL`, `AI_INTERNAL_API_KEY`를 모두 설정해야 합니다. 요청 시작·성공 로그에는 path와 시도 횟수를, 실패 로그에는 본문과 비밀키를 제외한 path·upstream 상태·예외 종류를 기록합니다. 현재 AI 서버 계약은 요청-응답 방식이며, AI 서버가 별도 callback으로 결과를 전달하는 계약은 아직 구현되어 있지 않습니다.
+기본 `AI_PROVIDER=mock`에서는 외부 AI HTTP 요청을 보내지 않고 프로세스 내부 mock 응답을 사용합니다. 실제 AI 서버를 호출하려면 `AI_PROVIDER=http`, `AI_BASE_URL`, `AI_INTERNAL_API_KEY`를 모두 설정해야 합니다. 채팅은 Notion 계약의 `POST /ai/chat`, 일일 컨설팅은 `POST /ai/consultings/daily`를 `X-Internal-Api-Key`와 함께 호출합니다. 일일 컨설팅 요청은 `userId`, `storeId`, ISO 날짜 `targetDate`, `reportFormat=DAILY_V1`을 전송합니다. 요청 시작·성공 로그에는 path와 시도 횟수를, 실패 로그에는 본문과 비밀키를 제외한 path·upstream 상태·예외 종류를 기록합니다. 현재 Notion AI 서버 계약은 동기 JSON 응답 방식이며, 메인 백엔드가 이 호출을 비동기 worker에서 처리해 결과를 저장한 뒤 프론트 polling에 노출합니다.
 
 ### 마케팅과 Instagram 계정
 

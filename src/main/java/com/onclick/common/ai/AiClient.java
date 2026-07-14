@@ -17,7 +17,7 @@ public interface AiClient {
 
     TomorrowVisitorsForecastResult forecastTomorrowVisitors(TomorrowVisitorsForecastRequest request);
 
-    ConsultingGenerationResult generateConsulting(ConsultingGenerationRequest request);
+    ConsultingGenerationResult generateDailyConsulting(ConsultingGenerationRequest request);
 
     ChatGenerationResult generateChatReply(ChatGenerationRequest request);
 

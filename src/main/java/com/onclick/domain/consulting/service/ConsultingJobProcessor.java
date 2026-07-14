@@ -37,7 +37,7 @@ class ConsultingJobProcessor {
     private void generate(ConsultingJobClaim job, int maxAttempts) {
         try {
             ConsultingGenerationRequest request = requestFactory.create(job);
-            ConsultingGenerationResult result = aiClient.generateConsulting(request);
+            ConsultingGenerationResult result = aiClient.generateDailyConsulting(request);
             jobManager.complete(job, result, ConsultingTargetDatePolicy.now(clock));
         } catch (RuntimeException exception) {
             log.warn(

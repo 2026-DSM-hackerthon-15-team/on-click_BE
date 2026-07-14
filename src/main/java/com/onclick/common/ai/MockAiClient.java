@@ -45,13 +45,11 @@ public class MockAiClient implements AiClient {
     }
 
     @Override
-    public ConsultingGenerationResult generateConsulting(ConsultingGenerationRequest request) {
+    public ConsultingGenerationResult generateDailyConsulting(ConsultingGenerationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        String title = request.targetDate() + " " + request.storeName() + " 영업 컨설팅";
-        String content = "총매출 " + request.totalSalesAmount()
-                + "원, 주문 " + request.orderCount()
-                + "건, 판매수량 " + request.totalQuantity()
-                + "개를 기준으로 생성한 컨설팅입니다.";
+        String title = request.targetDate() + " 일일 영업 컨설팅";
+        String content = request.storeId() + "번 매장의 "
+                + request.targetDate() + " 영업 데이터를 기준으로 생성한 컨설팅입니다.";
         return new ConsultingGenerationResult(title, content);
     }
 

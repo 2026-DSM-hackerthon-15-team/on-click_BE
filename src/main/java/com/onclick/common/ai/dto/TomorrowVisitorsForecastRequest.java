@@ -3,7 +3,13 @@ package com.onclick.common.ai.dto;
 import java.time.LocalDate;
 import java.util.Objects;
 
-public record TomorrowVisitorsForecastRequest(long storeId, LocalDate targetDate) {
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+public record TomorrowVisitorsForecastRequest(
+        long storeId,
+        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+        LocalDate targetDate
+) {
 
     public TomorrowVisitorsForecastRequest {
         if (storeId <= 0) {

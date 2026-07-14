@@ -47,17 +47,11 @@ class MockAiClientTest {
 
     @Test
     void returnsDeterministicConsultingChatAndMarketingMocks() {
-        var consulting = mockAiClient.generateConsulting(new ConsultingGenerationRequest(
-                11L,
+        var consulting = mockAiClient.generateDailyConsulting(new ConsultingGenerationRequest(
+                9L,
                 1L,
-                "강남점",
                 LocalDate.of(2026, 7, 13),
-                50_000,
-                3,
-                3,
-                7,
-                List.of(),
-                List.of()
+                ConsultingGenerationRequest.DAILY_V1
         ));
         var chat = mockAiClient.generateChatReply(new ChatGenerationRequest(
                 9L,
@@ -73,8 +67,8 @@ class MockAiClientTest {
                 "신메뉴 홍보"
         ));
 
-        assertThat(consulting.title()).isEqualTo("2026-07-13 강남점 영업 컨설팅");
-        assertThat(consulting.content()).contains("총매출 50000원", "주문 3건", "판매수량 7개");
+        assertThat(consulting.title()).isEqualTo("2026-07-13 일일 영업 컨설팅");
+        assertThat(consulting.content()).contains("1번 매장", "2026-07-13 영업 데이터");
         assertThat(chat.content()).isEqualTo(MockAiClient.MOCK_CHAT_PREFIX + "오늘 매출을 알려줘");
         assertThat(marketing.content()).isEqualTo(
                 MockAiClient.MOCK_MARKETING_PREFIX + "강남점 - 신메뉴 홍보"
