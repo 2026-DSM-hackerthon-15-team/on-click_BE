@@ -61,6 +61,18 @@ docker compose up -d --build
 
 판매 기록은 `GET /stores/{storeId}/sales/transactions?page=0&size=20&sortBy=soldAt&sortDirection=desc`로 조회합니다. `size`는 최대 100이며, 정렬 필드는 `soldAt`, `createdAt`, `saleId`, `status`를 지원합니다.
 
+배포 매장에 대시보드용 POS 샘플 데이터를 넣을 때는 `scripts/seed-pos-data.mjs`를 사용합니다. 기본값은 `http://cowtree28-server.duckdns.org`에 최근 30일간 하루 50건씩 총 1,500건을 생성하고, 과거 거래 약 5%를 취소 상태로 만듭니다. 활성 상품만 사용하며 고정 `clientTransactionId`와 로컬 manifest로 재실행 중복을 방지합니다.
+
+```bash
+ACCOUNT_ID='<계정 아이디>' \
+PASSWORD='<계정 비밀번호>' \
+STORE_ID='<대상 매장 ID>' \
+CONFIRM_SEED=YES \
+node scripts/seed-pos-data.mjs
+```
+
+계정에 매장이 하나뿐이면 `STORE_ID`는 생략할 수 있습니다. 실제 저장 전 연결·상품·생성 범위만 확인하려면 `CONFIRM_SEED` 대신 `DRY_RUN=true`를 사용합니다.
+
 ### 일일 컨설팅
 
 한국 시간과 매장 `closingTime`을 기준으로 마감된 영업일의 완료 매출을 집계합니다. 자동 생성 외에도 `POST /stores/{storeId}/consultings`로 특정 영업일의 생성을 요청할 수 있습니다. 최초 요청은 `202 Accepted`와 `PENDING` 컨설팅을 반환하며, 같은 `(storeId, targetDate)` 재요청은 기존 결과를 반환합니다. 실패 작업은 DB 상태를 이용해 최대 3회 재시도합니다.
