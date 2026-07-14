@@ -142,7 +142,11 @@ public class MediaStorageService {
     }
 
     public String publicUrl(MediaFile mediaFile) {
-        String baseUrl = properties.publicBaseUrl().replaceAll("/+$", "");
+        String baseUrl = properties.publicBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new ApiException(ErrorCode.MEDIA_STORAGE_ERROR, "media public base URL is not configured");
+        }
+        baseUrl = baseUrl.replaceAll("/+$", "");
         return baseUrl + "/public/media/" + mediaFile.getPublicId();
     }
 

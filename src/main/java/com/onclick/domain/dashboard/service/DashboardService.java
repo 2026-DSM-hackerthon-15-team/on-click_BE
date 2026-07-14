@@ -206,7 +206,9 @@ public class DashboardService {
     }
 
     private void requirePosData(List<SaleTransaction> transactions) {
-        if (transactions.isEmpty()) {
+        boolean hasCompleted = transactions.stream()
+                .anyMatch(tx -> tx.getStatus() == SaleStatus.COMPLETED);
+        if (!hasCompleted) {
             throw new ApiException(ErrorCode.POS_DATA_NOT_FOUND);
         }
     }

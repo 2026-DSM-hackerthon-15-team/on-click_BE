@@ -3,7 +3,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-const DEFAULT_BASE_URL = "http://cowtree28-server.duckdns.org";
+const DEFAULT_BASE_URL = "http://localhost:8080";
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const config = {
