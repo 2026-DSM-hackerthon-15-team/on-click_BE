@@ -8,6 +8,7 @@ import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
+import com.onclick.global.security.JwtTokenProvider;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ class ConsultingJobProcessor {
     private final ConsultingJobManager jobManager;
     private final ConsultingRequestFactory requestFactory;
     private final AiClient aiClient;
+    private final JwtTokenProvider jwtTokenProvider;
     private final ConsultingSchedulerProperties properties;
     private final Clock clock;
 
@@ -39,7 +41,8 @@ class ConsultingJobProcessor {
     private void generate(ConsultingJobClaim job, int maxAttempts) {
         try {
             ConsultingGenerationRequest request = requestFactory.create(job);
-            ConsultingGenerationResult result = aiClient.generateDailyConsulting(request);
+            String bearerToken = jwtTokenProvider.issue(request.userId()).value();
+            ConsultingGenerationResult result = aiClient.generateDailyConsulting(request, bearerToken);
             jobManager.complete(job, result, ConsultingTargetDatePolicy.now(clock));
         } catch (RuntimeException exception) {
             log.warn(

@@ -15,15 +15,27 @@ import com.onclick.common.ai.dto.TomorrowVisitorsForecastResult;
 
 public interface AiClient {
 
-    ClosingSalesForecastResult forecastClosingSales(ClosingSalesForecastRequest request);
+    ClosingSalesForecastResult forecastClosingSales(
+            ClosingSalesForecastRequest request,
+            String bearerToken
+    );
 
-    TomorrowVisitorsForecastResult forecastTomorrowVisitors(TomorrowVisitorsForecastRequest request);
+    TomorrowVisitorsForecastResult forecastTomorrowVisitors(
+            TomorrowVisitorsForecastRequest request,
+            String bearerToken
+    );
 
-    ConsultingGenerationResult generateDailyConsulting(ConsultingGenerationRequest request);
+    ConsultingGenerationResult generateDailyConsulting(
+            ConsultingGenerationRequest request,
+            String bearerToken
+    );
 
-    ChatGenerationResult generateChatReply(ChatGenerationRequest request);
+    ChatGenerationResult generateChatReply(ChatGenerationRequest request, String bearerToken);
 
-    MarketingGenerationResult generateMarketing(MarketingGenerationRequest request);
+    MarketingGenerationResult generateMarketing(
+            MarketingGenerationRequest request,
+            String bearerToken
+    );
 
     InstagramPublishResult publishInstagram(
             Long marketingId,

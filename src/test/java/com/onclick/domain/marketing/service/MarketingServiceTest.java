@@ -29,6 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -71,9 +72,10 @@ class MarketingServiceTest {
                 List.of(11L)
         );
         given(storeAccessValidator.validate(jwt, 3L)).willReturn(store);
+        given(jwt.getTokenValue()).willReturn("marketing-token");
         given(mediaStorageService.requireOwned(3L, List.of(11L))).willReturn(List.of(media));
         given(mediaStorageService.publicUrl(media)).willReturn("https://cdn.example.com/menu.jpg");
-        given(aiClient.generateMarketing(any(MarketingGenerationRequest.class)))
+        given(aiClient.generateMarketing(any(MarketingGenerationRequest.class), eq("marketing-token")))
                 .willReturn(new MarketingGenerationResult("완성된 홍보 문구", "claude-sonnet-4-6"));
         given(repository.save(any(MarketingContent.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
@@ -82,7 +84,7 @@ class MarketingServiceTest {
 
         ArgumentCaptor<MarketingGenerationRequest> captor =
                 ArgumentCaptor.forClass(MarketingGenerationRequest.class);
-        verify(aiClient).generateMarketing(captor.capture());
+        verify(aiClient).generateMarketing(captor.capture(), eq("marketing-token"));
         MarketingGenerationRequest aiRequest = captor.getValue();
         assertThat(aiRequest.userId()).isEqualTo(7L);
         assertThat(aiRequest.imageUrls()).containsExactly("https://cdn.example.com/menu.jpg");

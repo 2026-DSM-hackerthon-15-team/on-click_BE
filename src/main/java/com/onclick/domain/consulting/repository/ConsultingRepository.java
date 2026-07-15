@@ -24,6 +24,17 @@ public interface ConsultingRepository extends JpaRepository<Consulting, Long> {
     Optional<Consulting> findByStoreIdAndTargetDate(Long storeId, LocalDate targetDate);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT consulting FROM Consulting consulting
+             WHERE consulting.storeId = :storeId
+               AND consulting.targetDate = :targetDate
+            """)
+    Optional<Consulting> findByStoreIdAndTargetDateForUpdate(
+            @Param("storeId") Long storeId,
+            @Param("targetDate") LocalDate targetDate
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT consulting FROM Consulting consulting WHERE consulting.id = :consultingId")
     Optional<Consulting> findByIdForUpdate(@Param("consultingId") Long consultingId);
 

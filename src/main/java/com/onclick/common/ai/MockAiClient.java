@@ -37,19 +37,28 @@ public class MockAiClient implements AiClient {
     private final Clock clock;
 
     @Override
-    public ClosingSalesForecastResult forecastClosingSales(ClosingSalesForecastRequest request) {
+    public ClosingSalesForecastResult forecastClosingSales(
+            ClosingSalesForecastRequest request,
+            String bearerToken
+    ) {
         Objects.requireNonNull(request, "request must not be null");
         return new ClosingSalesForecastResult(MOCK_CLOSING_SALES, now());
     }
 
     @Override
-    public TomorrowVisitorsForecastResult forecastTomorrowVisitors(TomorrowVisitorsForecastRequest request) {
+    public TomorrowVisitorsForecastResult forecastTomorrowVisitors(
+            TomorrowVisitorsForecastRequest request,
+            String bearerToken
+    ) {
         Objects.requireNonNull(request, "request must not be null");
         return new TomorrowVisitorsForecastResult(MOCK_TOMORROW_VISITORS, now());
     }
 
     @Override
-    public ConsultingGenerationResult generateDailyConsulting(ConsultingGenerationRequest request) {
+    public ConsultingGenerationResult generateDailyConsulting(
+            ConsultingGenerationRequest request,
+            String bearerToken
+    ) {
         Objects.requireNonNull(request, "request must not be null");
         String title = request.targetDate() + " 일일 영업 컨설팅";
         String content = request.storeId() + "번 매장의 "
@@ -58,13 +67,16 @@ public class MockAiClient implements AiClient {
     }
 
     @Override
-    public ChatGenerationResult generateChatReply(ChatGenerationRequest request) {
+    public ChatGenerationResult generateChatReply(ChatGenerationRequest request, String bearerToken) {
         Objects.requireNonNull(request, "request must not be null");
         return new ChatGenerationResult(MOCK_CHAT_PREFIX + request.message());
     }
 
     @Override
-    public MarketingGenerationResult generateMarketing(MarketingGenerationRequest request) {
+    public MarketingGenerationResult generateMarketing(
+            MarketingGenerationRequest request,
+            String bearerToken
+    ) {
         Objects.requireNonNull(request, "request must not be null");
         return new MarketingGenerationResult(
                 MOCK_MARKETING_PREFIX + request.draftText(),

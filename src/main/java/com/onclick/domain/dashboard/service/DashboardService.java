@@ -134,7 +134,8 @@ public class DashboardService {
                 .filter(transaction -> transaction.getStatus() == SaleStatus.COMPLETED)
                 .toList());
         ClosingSalesForecastResult result = aiClient.forecastClosingSales(
-                new ClosingSalesForecastRequest(storeId, asOf, toAiSalesData(transactions))
+                new ClosingSalesForecastRequest(storeId, asOf, toAiSalesData(transactions)),
+                jwt.getTokenValue()
         );
         return new ClosingSalesForecastResponse(
                 storeId,
@@ -157,7 +158,8 @@ public class DashboardService {
                 );
         requirePosData(transactions);
         TomorrowVisitorsForecastResult result = aiClient.forecastTomorrowVisitors(
-                new TomorrowVisitorsForecastRequest(storeId, baseDate, toAiSalesData(transactions))
+                new TomorrowVisitorsForecastRequest(storeId, baseDate, toAiSalesData(transactions)),
+                jwt.getTokenValue()
         );
         return new TomorrowVisitorsForecastResponse(
                 storeId,

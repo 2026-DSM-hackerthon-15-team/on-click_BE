@@ -28,12 +28,14 @@ public class ConsultingJobManager {
             LocalDate targetDate,
             LocalDateTime now
     ) {
-        Optional<Consulting> existing = consultingRepository.findByStoreIdAndTargetDate(
+        Optional<Consulting> existing = consultingRepository.findByStoreIdAndTargetDateForUpdate(
                 storeId,
                 targetDate
         );
         if (existing.isPresent()) {
-            return new ConsultingJobRegistration(existing.orElseThrow().getId(), false);
+            Consulting consulting = existing.orElseThrow();
+            boolean restarted = consulting.restartIfFailed(now);
+            return new ConsultingJobRegistration(consulting.getId(), restarted);
         }
         Consulting created = consultingRepository.saveAndFlush(
                 Consulting.pending(storeId, targetDate, now)

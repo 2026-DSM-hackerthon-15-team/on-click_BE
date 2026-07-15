@@ -52,7 +52,7 @@ public class MarketingService {
                 hashtags,
                 request.tone(),
                 request.additionalRequest()
-        ));
+        ), jwt.getTokenValue());
         MarketingContent marketing = repository.save(new MarketingContent(
                 storeId,
                 request.productName().trim() + " Instagram 홍보",

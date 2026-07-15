@@ -78,13 +78,17 @@ public class HttpAiClient implements AiClient {
     }
 
     @Override
-    public ClosingSalesForecastResult forecastClosingSales(ClosingSalesForecastRequest request) {
+    public ClosingSalesForecastResult forecastClosingSales(
+            ClosingSalesForecastRequest request,
+            String bearerToken
+    ) {
         String path = properties.getPaths().getClosingSales();
         return mapResponse(path, () -> {
             ClosingSalesForecastWireResponse response = post(
                     path,
                     request,
-                    ClosingSalesForecastWireResponse.class
+                    ClosingSalesForecastWireResponse.class,
+                    bearerToken
             );
             validateClosingSalesResponse(request, response);
             return new ClosingSalesForecastResult(
@@ -95,13 +99,17 @@ public class HttpAiClient implements AiClient {
     }
 
     @Override
-    public TomorrowVisitorsForecastResult forecastTomorrowVisitors(TomorrowVisitorsForecastRequest request) {
+    public TomorrowVisitorsForecastResult forecastTomorrowVisitors(
+            TomorrowVisitorsForecastRequest request,
+            String bearerToken
+    ) {
         String path = properties.getPaths().getTomorrowVisitors();
         return mapResponse(path, () -> {
             TomorrowVisitorsForecastWireResponse response = post(
                     path,
                     request,
-                    TomorrowVisitorsForecastWireResponse.class
+                    TomorrowVisitorsForecastWireResponse.class,
+                    bearerToken
             );
             validateTomorrowVisitorsResponse(request, response);
             return new TomorrowVisitorsForecastResult(
@@ -112,13 +120,17 @@ public class HttpAiClient implements AiClient {
     }
 
     @Override
-    public ConsultingGenerationResult generateDailyConsulting(ConsultingGenerationRequest request) {
+    public ConsultingGenerationResult generateDailyConsulting(
+            ConsultingGenerationRequest request,
+            String bearerToken
+    ) {
         String path = properties.getPaths().getDailyConsulting();
         return mapResponse(path, () -> {
             ConsultingGenerationWireResponse response = post(
                     path,
                     request,
-                    ConsultingGenerationWireResponse.class
+                    ConsultingGenerationWireResponse.class,
+                    bearerToken
             );
             validateDailyConsultingResponse(request, response);
             return new ConsultingGenerationResult(response.title(), response.content());
@@ -126,13 +138,14 @@ public class HttpAiClient implements AiClient {
     }
 
     @Override
-    public ChatGenerationResult generateChatReply(ChatGenerationRequest request) {
+    public ChatGenerationResult generateChatReply(ChatGenerationRequest request, String bearerToken) {
         String path = properties.getPaths().getChat();
         return mapResponse(path, () -> {
             ChatGenerationWireResponse response = post(
                     path,
                     request,
-                    ChatGenerationWireResponse.class
+                    ChatGenerationWireResponse.class,
+                    bearerToken
             );
             validateChatResponse(response);
             return new ChatGenerationResult(response.answer());
@@ -140,7 +153,10 @@ public class HttpAiClient implements AiClient {
     }
 
     @Override
-    public MarketingGenerationResult generateMarketing(MarketingGenerationRequest request) {
+    public MarketingGenerationResult generateMarketing(
+            MarketingGenerationRequest request,
+            String bearerToken
+    ) {
         String path = properties.getPaths().getMarketing();
         try {
             validateMarketingRequest(request);
@@ -151,7 +167,8 @@ public class HttpAiClient implements AiClient {
             MarketingGenerationWireResponse response = post(
                     path,
                     request,
-                    MarketingGenerationWireResponse.class
+                    MarketingGenerationWireResponse.class,
+                    bearerToken
             );
             return new MarketingGenerationResult(
                     requireText(response.content(), "content"),
@@ -363,8 +380,9 @@ public class HttpAiClient implements AiClient {
             throw new IllegalArgumentException("imageUrls must contain between 1 and 10 items");
         }
         for (String imageUrl : imageUrls) {
-            if (imageUrl == null || !imageUrl.startsWith("https://")) {
-                throw new IllegalArgumentException("imageUrls must contain HTTPS URLs");
+            if (imageUrl == null
+                    || (!imageUrl.startsWith("https://") && !imageUrl.startsWith("http://"))) {
+                throw new IllegalArgumentException("imageUrls must contain HTTP or HTTPS URLs");
             }
         }
         requireTextWithin(request.draftText(), "draftText", 2_000);
@@ -558,6 +576,15 @@ public class HttpAiClient implements AiClient {
     }
 
     private <T> T post(String path, Object request, Class<T> responseType) {
+        return post(path, request, responseType, null);
+    }
+
+    private <T> T post(
+            String path,
+            Object request,
+            Class<T> responseType,
+            String explicitBearerToken
+    ) {
         Objects.requireNonNull(request, "request must not be null");
         int maxAttempts = Math.max(1, properties.getMaxAttempts());
         RuntimeException lastFailure = null;
@@ -573,7 +600,7 @@ public class HttpAiClient implements AiClient {
                 T response = restClient.post()
                     .uri(path)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .headers(headers -> applyAuthorizationHeader(headers, null))
+                    .headers(headers -> applyAuthorizationHeader(headers, explicitBearerToken))
                     .body(serializeRequest(request))
                     .retrieve()
                     .body(responseType);

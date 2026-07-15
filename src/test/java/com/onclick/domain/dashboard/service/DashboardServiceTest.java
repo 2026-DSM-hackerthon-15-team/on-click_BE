@@ -34,6 +34,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -146,6 +147,7 @@ class DashboardServiceTest {
 
     @Test
     void forecastsKeepPublicContractAndUseCompletedTransactionSales() {
+        given(jwt.getTokenValue()).willReturn("dashboard-token");
         LocalDateTime generatedAt = LocalDateTime.parse("2026-07-13T15:00:30");
         List<SaleTransaction> transactions = List.of(
                 completedTransaction("TX-1", atHour(9, 10), item(1, 2, 8_000)),
@@ -159,9 +161,9 @@ class DashboardServiceTest {
         given(saleTransactionRepository.findAllByStoreIdAndSoldAtLessThanOrderBySoldAtAsc(
                 STORE_ID, DAY_END))
                 .willReturn(transactions);
-        given(aiClient.forecastClosingSales(any(ClosingSalesForecastRequest.class)))
+        given(aiClient.forecastClosingSales(any(ClosingSalesForecastRequest.class), eq("dashboard-token")))
                 .willReturn(new ClosingSalesForecastResult(25_000, generatedAt));
-        given(aiClient.forecastTomorrowVisitors(any(TomorrowVisitorsForecastRequest.class)))
+        given(aiClient.forecastTomorrowVisitors(any(TomorrowVisitorsForecastRequest.class), eq("dashboard-token")))
                 .willReturn(new TomorrowVisitorsForecastResult(120, generatedAt));
 
         var closing = dashboardService.getClosingSalesForecast(jwt, STORE_ID);
@@ -177,8 +179,8 @@ class DashboardServiceTest {
                 ArgumentCaptor.forClass(ClosingSalesForecastRequest.class);
         ArgumentCaptor<TomorrowVisitorsForecastRequest> visitorsCaptor =
                 ArgumentCaptor.forClass(TomorrowVisitorsForecastRequest.class);
-        verify(aiClient).forecastClosingSales(closingCaptor.capture());
-        verify(aiClient).forecastTomorrowVisitors(visitorsCaptor.capture());
+        verify(aiClient).forecastClosingSales(closingCaptor.capture(), eq("dashboard-token"));
+        verify(aiClient).forecastTomorrowVisitors(visitorsCaptor.capture(), eq("dashboard-token"));
         assertThat(closingCaptor.getValue().asOf()).isEqualTo(NOW);
         assertThat(closingCaptor.getValue().salesData()).hasSize(3);
         assertThat(visitorsCaptor.getValue().baseDate()).isEqualTo(BUSINESS_DATE);

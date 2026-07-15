@@ -93,7 +93,7 @@ class HttpAiClientTest {
                 ));
         HttpAiClient client = new HttpAiClient(properties, restClientBuilder.build());
 
-        var result = client.forecastClosingSales(closingSalesRequest());
+        var result = client.forecastClosingSales(closingSalesRequest(), "jwt");
 
         assertThat(result.expectedClosingSales()).isEqualTo(41_000);
         assertThat(result.generatedAt()).isEqualTo(LocalDateTime.of(2026, 7, 14, 18, 30));
@@ -168,7 +168,7 @@ class HttpAiClientTest {
                 null
         );
 
-        client.generateMarketing(request);
+        client.generateMarketing(request, "jwt");
 
         assertThat(output)
                 .contains("AI request started: path=/ai/marketings/copy, attempt=1/3")
@@ -197,7 +197,7 @@ class HttpAiClientTest {
                 null
         );
 
-        assertThatThrownBy(() -> client.generateMarketing(request))
+        assertThatThrownBy(() -> client.generateMarketing(request, "jwt"))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.AI_REQUEST_REJECTED));
 

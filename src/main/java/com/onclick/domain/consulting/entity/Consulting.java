@@ -97,6 +97,22 @@ public class Consulting {
         return new Consulting(storeId, targetDate, now);
     }
 
+    public boolean restartIfFailed(LocalDateTime now) {
+        Objects.requireNonNull(now, "now must not be null");
+        if (status != ConsultingStatus.FAILED) {
+            return false;
+        }
+        status = ConsultingStatus.PENDING;
+        attemptCount = 0;
+        nextRetryAt = now;
+        lastError = null;
+        title = null;
+        content = null;
+        generatedAt = null;
+        updatedAt = now;
+        return true;
+    }
+
     public boolean claim(LocalDateTime now, Duration leaseDuration, int maxAttempts) {
         Objects.requireNonNull(now, "now must not be null");
         Objects.requireNonNull(leaseDuration, "leaseDuration must not be null");

@@ -12,6 +12,8 @@ import com.onclick.common.ai.dto.ConsultingGenerationRequest;
 import com.onclick.common.ai.dto.ConsultingGenerationResult;
 import com.onclick.global.error.ApiException;
 import com.onclick.global.error.ErrorCode;
+import com.onclick.global.security.IssuedAccessToken;
+import com.onclick.global.security.JwtTokenProvider;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,9 @@ class ConsultingJobProcessorTest {
     @Mock
     private AiClient aiClient;
 
+    @Mock
+    private JwtTokenProvider jwtTokenProvider;
+
     private ConsultingJobProcessor processor;
 
     @BeforeEach
@@ -51,6 +56,7 @@ class ConsultingJobProcessorTest {
                 jobManager,
                 requestFactory,
                 aiClient,
+                jwtTokenProvider,
                 properties,
                 fixedClock(NOW)
         );
@@ -67,7 +73,9 @@ class ConsultingJobProcessorTest {
         given(jobManager.claim(10L, NOW, Duration.ofMinutes(2), 3))
                 .willReturn(Optional.of(claim));
         given(requestFactory.create(claim)).willReturn(request);
-        given(aiClient.generateDailyConsulting(request)).willReturn(result);
+        given(jwtTokenProvider.issue(request.userId()))
+                .willReturn(new IssuedAccessToken("consulting-token", 3600));
+        given(aiClient.generateDailyConsulting(request, "consulting-token")).willReturn(result);
 
         processor.process(10L);
 
@@ -81,7 +89,9 @@ class ConsultingJobProcessorTest {
         given(jobManager.claim(10L, NOW, Duration.ofMinutes(2), 3))
                 .willReturn(Optional.of(claim));
         given(requestFactory.create(claim)).willReturn(request);
-        given(aiClient.generateDailyConsulting(request))
+        given(jwtTokenProvider.issue(request.userId()))
+                .willReturn(new IssuedAccessToken("consulting-token", 3600));
+        given(aiClient.generateDailyConsulting(request, "consulting-token"))
                 .willThrow(new ApiException(ErrorCode.AI_SERVICE_UNAVAILABLE));
 
         processor.process(10L);
@@ -102,7 +112,9 @@ class ConsultingJobProcessorTest {
         given(jobManager.claim(10L, NOW, Duration.ofMinutes(2), 3))
                 .willReturn(Optional.of(claim));
         given(requestFactory.create(claim)).willReturn(request);
-        given(aiClient.generateDailyConsulting(request))
+        given(jwtTokenProvider.issue(request.userId()))
+                .willReturn(new IssuedAccessToken("consulting-token", 3600));
+        given(aiClient.generateDailyConsulting(request, "consulting-token"))
                 .willThrow(new ApiException(ErrorCode.AI_REQUEST_REJECTED));
 
         processor.process(10L);

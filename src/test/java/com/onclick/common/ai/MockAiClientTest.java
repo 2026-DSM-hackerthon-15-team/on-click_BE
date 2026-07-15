@@ -36,7 +36,8 @@ class MockAiClientTest {
                         1L,
                         LocalDateTime.of(2026, 7, 13, 15, 0),
                         salesData()
-                )
+                ),
+                "jwt"
         );
 
         assertThat(result.expectedClosingSales()).isEqualTo(MockAiClient.MOCK_CLOSING_SALES);
@@ -46,7 +47,8 @@ class MockAiClientTest {
     @Test
     void returnsFixedTomorrowVisitorsMockWithoutCalculatingForecast() {
         TomorrowVisitorsForecastResult result = mockAiClient.forecastTomorrowVisitors(
-                new TomorrowVisitorsForecastRequest(1L, LocalDate.of(2026, 7, 13), salesData())
+                new TomorrowVisitorsForecastRequest(1L, LocalDate.of(2026, 7, 13), salesData()),
+                "jwt"
         );
 
         assertThat(result.expectedVisitors()).isEqualTo(MockAiClient.MOCK_TOMORROW_VISITORS);
@@ -60,7 +62,7 @@ class MockAiClientTest {
                 1L,
                 LocalDate.of(2026, 7, 13),
                 ConsultingGenerationRequest.DAILY_V1
-        ));
+        ), "consulting-token");
         var chat = mockAiClient.generateChatReply(new ChatGenerationRequest(
                 9L,
                 1L,
@@ -68,7 +70,7 @@ class MockAiClientTest {
                 "오늘 매출을 알려줘",
                 List.of("sales_analysis"),
                 List.of()
-        ));
+        ), "jwt");
         var marketing = mockAiClient.generateMarketing(new MarketingGenerationRequest(
                 9L,
                 List.of("https://cdn.example.com/menu.jpg"),
@@ -76,7 +78,7 @@ class MockAiClientTest {
                 List.of("#신메뉴"),
                 "친근하게",
                 null
-        ));
+        ), "jwt");
         var publication = mockAiClient.publishInstagram(
                 31L,
                 new InstagramPublishRequest(
