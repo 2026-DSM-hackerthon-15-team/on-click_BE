@@ -419,19 +419,47 @@ public class HttpAiClient implements AiClient {
             ConsultingGenerationRequest request,
             ConsultingGenerationWireResponse response
     ) {
+        if (response == null) {
+            throw new IllegalArgumentException("response must not be null");
+        }
         if (!request.targetDate().equals(response.targetDate())) {
             throw new IllegalArgumentException("targetDate does not match the request");
         }
-        requireText(response.summary(), "summary");
-        requireText(response.model(), "model");
-        requireList(response.chatInsights(), "chatInsights");
-        requireList(response.externalFactors(), "externalFactors");
-        requireList(response.warnings(), "warnings");
-        validateMetrics(requireList(response.keyMetrics(), "keyMetrics"));
-        validateCauses(requireList(response.estimatedCauses(), "estimatedCauses"));
-        validateRecommendations(requireList(response.recommendations(), "recommendations"));
-        validateToolExecutions(requireList(response.usedTools(), "usedTools"));
-        validateCitations(requireList(response.citations(), "citations"));
+        String title = response.title();
+        String content = response.content();
+        if ((title == null || title.isBlank()) && (content == null || content.isBlank())) {
+            throw new IllegalArgumentException("response must include title or content");
+        }
+        if (response.summary() != null && !response.summary().isBlank()) {
+            requireText(response.summary(), "summary");
+        }
+        if (response.model() != null && !response.model().isBlank()) {
+            requireText(response.model(), "model");
+        }
+        if (response.chatInsights() != null) {
+            requireList(response.chatInsights(), "chatInsights");
+        }
+        if (response.externalFactors() != null) {
+            requireList(response.externalFactors(), "externalFactors");
+        }
+        if (response.warnings() != null) {
+            requireList(response.warnings(), "warnings");
+        }
+        if (response.keyMetrics() != null) {
+            validateMetrics(requireList(response.keyMetrics(), "keyMetrics"));
+        }
+        if (response.estimatedCauses() != null) {
+            validateCauses(requireList(response.estimatedCauses(), "estimatedCauses"));
+        }
+        if (response.recommendations() != null) {
+            validateRecommendations(requireList(response.recommendations(), "recommendations"));
+        }
+        if (response.usedTools() != null) {
+            validateToolExecutions(requireList(response.usedTools(), "usedTools"));
+        }
+        if (response.citations() != null) {
+            validateCitations(requireList(response.citations(), "citations"));
+        }
     }
 
     private void validateToolExecutions(List<AiToolExecutionWireResponse> executions) {
