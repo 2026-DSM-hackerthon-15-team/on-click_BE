@@ -3,6 +3,7 @@ package com.onclick.common.ai;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.onclick.common.ai.dto.InstagramImageAttachment;
 import com.onclick.common.ai.dto.InstagramPublishRequest;
 import com.onclick.common.ai.dto.InstagramPublishStatus;
 import com.onclick.common.ai.dto.ClosingSalesForecastRequest;
@@ -111,7 +112,9 @@ class HttpAiClientTest {
                 .andExpect(jsonPath("$.instagramPassword").value("password123!"))
                 .andExpect(jsonPath("$.content").value("오늘의 신메뉴입니다."))
                 .andExpect(jsonPath("$.hashtags[0]").value("#신메뉴"))
-                .andExpect(jsonPath("$.imageUrls[0]").value("https://cdn.example.com/menu.jpg"))
+                .andExpect(jsonPath("$.images[0].filename").value("menu.jpg"))
+                .andExpect(jsonPath("$.images[0].contentType").value("image/jpeg"))
+                .andExpect(jsonPath("$.images[0].content").value("AQID"))
                 .andExpect(jsonPath("$.idempotencyKey").value("publish-key"))
                 .andRespond(withSuccess(
                         """
@@ -258,7 +261,11 @@ class HttpAiClientTest {
                 "password123!",
                 "오늘의 신메뉴입니다.",
                 List.of("#신메뉴"),
-                List.of("https://cdn.example.com/menu.jpg"),
+                List.of(new InstagramImageAttachment(
+                        "menu.jpg",
+                        new byte[] {1, 2, 3},
+                        "image/jpeg"
+                )),
                 "publish-key"
         );
     }

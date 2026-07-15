@@ -3,14 +3,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-const DEFAULT_BASE_URL = "http://localhost:8080";
+const DEFAULT_BASE_URL = "https://cowtree28-server.duckdns.org";
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const config = {
   baseUrl: (process.env.BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, ""),
   accountId: process.env.ACCOUNT_ID,
-  password: process.env.PASSWORD,
-  storeId: optionalPositiveInteger("STORE_ID"),
+  password: "namwoo28!",
+  storeId: 10,
   days: positiveInteger("DAYS", 30),
   salesPerDay: positiveInteger("SALES_PER_DAY", 50),
   concurrency: positiveInteger("CONCURRENCY", 5),

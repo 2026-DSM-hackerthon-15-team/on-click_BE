@@ -38,7 +38,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -181,28 +180,13 @@ public class HttpAiClient implements AiClient {
                     marketingId,
                     request
             );
-            MultipartBodyBuilder multipartBodyBuilder = new MultipartBodyBuilder();
-            multipartBodyBuilder.part("userId", request.userId());
-            multipartBodyBuilder.part("instagramUsername", request.instagramUsername());
-            multipartBodyBuilder.part("instagramPassword", request.instagramPassword());
-            multipartBodyBuilder.part("content", request.content());
-            multipartBodyBuilder.part("hashtags", request.hashtags());
-            multipartBodyBuilder.part("idempotencyKey", request.idempotencyKey());
-            for (InstagramImageAttachment image : request.images()) {
-                multipartBodyBuilder.part(
-                        "images",
-                        image.content(),
-                        MediaType.APPLICATION_OCTET_STREAM
-                ).filename(image.filename());
-            }
-
-            InstagramPublishResult response = restClient.post()
-                    .uri(path, Map.of("marketingId", marketingId))
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .headers(headers -> applyAuthorizationHeader(headers, bearerToken))
-                    .body(multipartBodyBuilder.build())
-                    .retrieve()
-                    .body(InstagramPublishResult.class);
+            InstagramPublishResult response = post(
+                    path,
+                    request,
+                    InstagramPublishResult.class,
+                    bearerToken,
+                    Map.of("marketingId", marketingId)
+            );
             log.info(
                     "AI Instagram response received: path={}, marketingId={}, response={}",
                     path,
@@ -225,6 +209,27 @@ public class HttpAiClient implements AiClient {
             throw failure(path, exception, ErrorCode.AI_RESPONSE_INVALID);
         } catch (RuntimeException exception) {
             throw failure(path, exception, ErrorCode.AI_RESPONSE_INVALID);
+        }
+    }
+
+    private <T> T post(
+            String path,
+            Object request,
+            Class<T> responseType,
+            String explicitBearerToken,
+            Map<String, Object> uriVariables
+    ) {
+        Objects.requireNonNull(request, "request must not be null");
+        try {
+            return restClient.post()
+                    .uri(path, uriVariables)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> applyAuthorizationHeader(headers, explicitBearerToken))
+                    .body(serializeRequest(request))
+                    .retrieve()
+                    .body(responseType);
+        } catch (RestClientException exception) {
+            throw exception;
         }
     }
 

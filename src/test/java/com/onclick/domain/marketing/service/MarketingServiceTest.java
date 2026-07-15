@@ -11,6 +11,7 @@ import com.onclick.domain.marketing.entity.MarketingContent;
 import com.onclick.domain.marketing.repository.MarketingContentRepository;
 import com.onclick.domain.media.entity.MediaFile;
 import com.onclick.domain.media.service.MediaStorageService;
+import com.onclick.domain.product.repository.ProductRepository;
 import com.onclick.domain.store.entity.Store;
 import com.onclick.domain.store.service.StoreAccessValidator;
 import com.onclick.global.error.ApiException;
@@ -37,6 +38,7 @@ class MarketingServiceTest {
 
     @Mock MarketingContentRepository repository;
     @Mock MediaStorageService mediaStorageService;
+    @Mock ProductRepository productRepository;
     @Mock StoreAccessValidator storeAccessValidator;
     @Mock AiClient aiClient;
     @Mock Jwt jwt;
@@ -48,6 +50,7 @@ class MarketingServiceTest {
         service = new MarketingService(
                 repository,
                 mediaStorageService,
+                productRepository,
                 storeAccessValidator,
                 aiClient
         );

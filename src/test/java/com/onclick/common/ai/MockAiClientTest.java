@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import com.onclick.common.ai.dto.InstagramImageAttachment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MockAiClientTest {
@@ -84,7 +85,11 @@ class MockAiClientTest {
                         "password123!",
                         "신메뉴 홍보",
                         List.of("#신메뉴"),
-                        List.of("https://cdn.example.com/menu.jpg"),
+                        List.of(new InstagramImageAttachment(
+                                "menu.jpg",
+                                new byte[] {1, 2, 3},
+                                "image/jpeg"
+                        )),
                         "publish-key"
                 ),
                 "jwt"
